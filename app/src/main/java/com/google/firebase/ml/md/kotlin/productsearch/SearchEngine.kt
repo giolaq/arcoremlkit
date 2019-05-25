@@ -23,6 +23,8 @@ import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.ml.md.kotlin.objectdetection.DetectedObject
+import com.google.firebase.ml.vision.FirebaseVision
+import com.google.firebase.ml.vision.common.FirebaseVisionImage
 import java.util.ArrayList
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
@@ -42,11 +44,28 @@ class SearchEngine(context: Context) {
                     Log.e(TAG, "Failed to create product search request!", e)
                     // Remove the below dummy code after your own product search backed hooked up.
                     val productList = ArrayList<Product>()
-                    for (i in 0..7) {
-                        productList.add(
-                                Product(/* imageUrl= */"", "Product title $i", "Product subtitle $i"))
-                    }
-                    listener.invoke(detectedObject, productList)
+
+                    //TODO: complete label recognition
+                    val image = FirebaseVisionImage.fromBitmap(detectedObject.getBitmap())
+                    val labeler = FirebaseVision.getInstance().cloudImageLabeler
+                    labeler.processImage(image)
+                        .addOnSuccessListener { labels ->
+                            for (label in labels) {
+                                val text = label.text
+                                val entityId = label.entityId
+                                val confidence = label.confidence
+                                productList.add(
+                                    Product(/* imageUrl= */"", "Product title $text", "Product subtitle $confidence"))
+
+                            }
+                            listener.invoke(detectedObject, productList)
+                        }
+                        .addOnFailureListener { e ->
+                            val excep = e.message
+                        }
+
+
+
                 }
     }
 

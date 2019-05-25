@@ -112,12 +112,13 @@ class StaticObjectDetectionActivity : AppCompatActivity(), View.OnClickListener 
         findViewById<View>(R.id.photo_library_button).setOnClickListener(this)
 
         detector = FirebaseVision.getInstance()
-                .getOnDeviceObjectDetector(
-                        FirebaseVisionObjectDetectorOptions.Builder()
-                                .setDetectorMode(FirebaseVisionObjectDetectorOptions.SINGLE_IMAGE_MODE)
-                                .enableMultipleObjects()
-                                .build()
-                )
+            .getOnDeviceObjectDetector(
+                FirebaseVisionObjectDetectorOptions.Builder()
+                    .setDetectorMode(FirebaseVisionObjectDetectorOptions.SINGLE_IMAGE_MODE)
+                    .enableMultipleObjects()
+                    .enableClassification()
+                    .build()
+            )
         intent.data?.let { detectObjects(it) }
     }
 
@@ -163,8 +164,8 @@ class StaticObjectDetectionActivity : AppCompatActivity(), View.OnClickListener 
         searchedObjectForBottomSheet = searchedObject
         val productList = searchedObject.productList
         bottomSheetTitleView?.text = resources
-                .getQuantityString(
-                        R.plurals.bottom_sheet_title, productList.size, productList.size)
+            .getQuantityString(
+                R.plurals.bottom_sheet_title, productList.size, productList.size)
         productRecyclerView?.adapter = ProductAdapter(productList)
         bottomSheetBehavior?.peekHeight = (inputImageView?.parent as View).height / 2
         bottomSheetBehavior?.state = BottomSheetBehavior.STATE_COLLAPSED
@@ -174,27 +175,27 @@ class StaticObjectDetectionActivity : AppCompatActivity(), View.OnClickListener 
         bottomSheetBehavior = BottomSheetBehavior.from(findViewById<View>(R.id.bottom_sheet)).apply {
 
             setBottomSheetCallback(
-                    object : BottomSheetBehavior.BottomSheetCallback() {
-                        override fun onStateChanged(bottomSheet: View, newState: Int) {
-                            Log.d(TAG, "Bottom sheet new state: $newState")
-                            bottomSheetScrimView?.visibility = if (newState == BottomSheetBehavior.STATE_HIDDEN) View.GONE else View.VISIBLE
-                        }
-
-                        override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                            if (java.lang.Float.isNaN(slideOffset)) {
-                                return
-                            }
-
-                            val collapsedStateHeight = Math.min(bottomSheetBehavior!!.peekHeight, bottomSheet.height)
-                            val searchedObjectForBottomSheet = searchedObjectForBottomSheet
-                                    ?: return
-                            bottomSheetScrimView?.updateWithThumbnailTranslate(
-                                    searchedObjectForBottomSheet.getObjectThumbnail(),
-                                    collapsedStateHeight,
-                                    slideOffset,
-                                    bottomSheet)
-                        }
+                object : BottomSheetBehavior.BottomSheetCallback() {
+                    override fun onStateChanged(bottomSheet: View, newState: Int) {
+                        Log.d(TAG, "Bottom sheet new state: $newState")
+                        bottomSheetScrimView?.visibility = if (newState == BottomSheetBehavior.STATE_HIDDEN) View.GONE else View.VISIBLE
                     }
+
+                    override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                        if (java.lang.Float.isNaN(slideOffset)) {
+                            return
+                        }
+
+                        val collapsedStateHeight = Math.min(bottomSheetBehavior!!.peekHeight, bottomSheet.height)
+                        val searchedObjectForBottomSheet = searchedObjectForBottomSheet
+                            ?: return
+                        bottomSheetScrimView?.updateWithThumbnailTranslate(
+                            searchedObjectForBottomSheet.getObjectThumbnail(),
+                            collapsedStateHeight,
+                            slideOffset,
+                            bottomSheet)
+                    }
+                }
             )
             state = BottomSheetBehavior.STATE_HIDDEN
         }
@@ -231,8 +232,8 @@ class StaticObjectDetectionActivity : AppCompatActivity(), View.OnClickListener 
         loadingView?.visibility = View.VISIBLE
         val image = FirebaseVisionImage.fromBitmap(inputBitmap!!)
         detector?.processImage(image)
-                ?.addOnSuccessListener { objects -> onObjectsDetected(image, objects) }
-                ?.addOnFailureListener { onObjectsDetected(image, ImmutableList.of()) }
+            ?.addOnSuccessListener { objects -> onObjectsDetected(image, objects) }
+            ?.addOnFailureListener { onObjectsDetected(image, ImmutableList.of()) }
     }
 
     @MainThread
@@ -265,23 +266,23 @@ class StaticObjectDetectionActivity : AppCompatActivity(), View.OnClickListener 
         loadingView?.visibility = View.GONE
         previewCardCarousel?.adapter = PreviewCardAdapter(ImmutableList.copyOf(searchedObjectMap.values)) { showSearchResults(it) }
         previewCardCarousel?.addOnScrollListener(
-                object : RecyclerView.OnScrollListener() {
-                    override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
-                        Log.d(TAG, "New card scroll state: $newState")
-                        if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                            for (i in 0 until recyclerView.childCount) {
-                                val childView = recyclerView.getChildAt(i)
-                                if (childView.x >= 0) {
-                                    val cardIndex = recyclerView.getChildAdapterPosition(childView)
-                                    if (cardIndex != currentSelectedObjectIndex) {
-                                        selectNewObject(cardIndex)
-                                    }
-                                    break
+            object : RecyclerView.OnScrollListener() {
+                override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                    Log.d(TAG, "New card scroll state: $newState")
+                    if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                        for (i in 0 until recyclerView.childCount) {
+                            val childView = recyclerView.getChildAt(i)
+                            if (childView.x >= 0) {
+                                val cardIndex = recyclerView.getChildAdapterPosition(childView)
+                                if (cardIndex != currentSelectedObjectIndex) {
+                                    selectNewObject(cardIndex)
                                 }
+                                break
                             }
                         }
                     }
-                })
+                }
+            })
 
         for (searchedObject in searchedObjectMap.values) {
             val dotView = createDotView(searchedObject)
@@ -322,22 +323,22 @@ class StaticObjectDetectionActivity : AppCompatActivity(), View.OnClickListener 
 
         val boundingBox = searchedObject.boundingBox
         val boxInViewCoordinate = RectF(
-                boundingBox.left * viewCoordinateScale + horizontalGap,
-                boundingBox.top * viewCoordinateScale + verticalGap,
-                boundingBox.right * viewCoordinateScale + horizontalGap,
-                boundingBox.bottom * viewCoordinateScale + verticalGap
+            boundingBox.left * viewCoordinateScale + horizontalGap,
+            boundingBox.top * viewCoordinateScale + verticalGap,
+            boundingBox.right * viewCoordinateScale + horizontalGap,
+            boundingBox.bottom * viewCoordinateScale + verticalGap
         )
         val initialSelected = searchedObject.objectIndex == 0
         val dotView = StaticObjectDotView(this, initialSelected)
         val layoutParams = FrameLayout.LayoutParams(dotViewSize, dotViewSize)
         val dotCenter = PointF(
-                (boxInViewCoordinate.right + boxInViewCoordinate.left) / 2,
-                (boxInViewCoordinate.bottom + boxInViewCoordinate.top) / 2)
+            (boxInViewCoordinate.right + boxInViewCoordinate.left) / 2,
+            (boxInViewCoordinate.bottom + boxInViewCoordinate.top) / 2)
         layoutParams.setMargins(
-                (dotCenter.x - dotViewSize / 2f).toInt(),
-                (dotCenter.y - dotViewSize / 2f).toInt(),
-                0,
-                0
+            (dotCenter.x - dotViewSize / 2f).toInt(),
+            (dotCenter.y - dotViewSize / 2f).toInt(),
+            0,
+            0
         )
         dotView.layoutParams = layoutParams
         return dotView

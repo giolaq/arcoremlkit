@@ -124,6 +124,7 @@ public class StaticObjectDetectionActivity extends AppCompatActivity
                 new FirebaseVisionObjectDetectorOptions.Builder()
                     .setDetectorMode(FirebaseVisionObjectDetectorOptions.SINGLE_IMAGE_MODE)
                     .enableMultipleObjects()
+                    .enableClassification()
                     .build());
     if (getIntent().getData() != null) {
       detectObjects(getIntent().getData());
