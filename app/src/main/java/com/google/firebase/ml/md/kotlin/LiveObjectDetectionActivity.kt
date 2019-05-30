@@ -36,6 +36,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.chip.Chip
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.ar.core.ArCoreApk
+import com.google.ar.core.Config
+import com.google.ar.core.Session
+import com.google.ar.core.exceptions.*
 import com.google.common.base.Objects
 import com.google.common.collect.ImmutableList
 import com.google.firebase.ml.md.R
@@ -44,6 +48,7 @@ import com.google.firebase.ml.md.kotlin.camera.WorkflowModel
 import com.google.firebase.ml.md.kotlin.camera.WorkflowModel.WorkflowState
 import com.google.firebase.ml.md.kotlin.camera.CameraSource
 import com.google.firebase.ml.md.kotlin.camera.CameraSourcePreview
+import com.google.firebase.ml.md.kotlin.helpers.CameraPermissionHelper
 import com.google.firebase.ml.md.kotlin.objectdetection.MultiObjectProcessor
 import com.google.firebase.ml.md.kotlin.objectdetection.ProminentObjectProcessor
 import com.google.firebase.ml.md.kotlin.productsearch.BottomSheetScrimView
@@ -55,6 +60,10 @@ import java.io.IOException
 
 /** Demonstrates the object detection and visual search workflow using camera preview.  */
 class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
+
+    private var session: Session? = null
+    private var config: Config? = null
+    private var installRequested: Boolean = false
 
     private var cameraSource: CameraSource? = null
     private var preview: CameraSourcePreview? = null
@@ -113,22 +122,85 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     override fun onResume() {
         super.onResume()
 
+        if (session == null) {
+            var exception: Exception? = null
+            var message: String? = null
+            try {
+                when (ArCoreApk.getInstance().requestInstall(this, !installRequested)) {
+                    ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
+                        installRequested = true
+                        return
+                    }
+                    ArCoreApk.InstallStatus.INSTALLED -> {
+                    }
+                }
+
+                // ARCore requires camera permissions to operate. If we did not yet obtain runtime
+                // permission on Android M and above, now is a good time to ask the user for it.
+                if (!CameraPermissionHelper.hasCameraPermission(this)) {
+                    CameraPermissionHelper.requestCameraPermission(this)
+                    return
+                }
+
+                session = Session(/* context= */this)
+                config = Config(session)
+            } catch (e: UnavailableArcoreNotInstalledException) {
+                message = "Please install ARCore"
+                exception = e
+            } catch (e: UnavailableUserDeclinedInstallationException) {
+                message = "Please install ARCore"
+                exception = e
+            } catch (e: UnavailableApkTooOldException) {
+                message = "Please update ARCore"
+                exception = e
+            } catch (e: UnavailableSdkTooOldException) {
+                message = "Please update this app"
+                exception = e
+            } catch (e: Exception) {
+                message = "This device does not support AR"
+                exception = e
+            }
+
+            if (message != null) {
+               // messageSnackbarHelper.showError(this, message)
+                Log.e(TAG, "Exception creating session", exception)
+                return
+            }
+        }
+        // Note that order matters - see the note in onPause(), the reverse applies here.
+        try {
+            session?.resume()
+        } catch (e: CameraNotAvailableException) {
+            // In some cases (such as another camera app launching) the camera may be given to
+            // a different app instead. Handle this properly by showing a message and recreate the
+            // session at the next iteration.
+            //messageSnackbarHelper.showError(this, "Camera not available. Please restart the app.")
+            session = null
+            return
+        }
+
+
+
+
         workflowModel?.markCameraFrozen()
         settingsButton?.isEnabled = true
         bottomSheetBehavior?.state = BottomSheetBehavior.STATE_HIDDEN
         currentWorkflowState = WorkflowState.NOT_STARTED
         cameraSource?.setFrameProcessor(
-                if (PreferenceUtils.isMultipleObjectsMode(this)) {
-                    MultiObjectProcessor(graphicOverlay!!, workflowModel!!)
-                } else {
-                    ProminentObjectProcessor(graphicOverlay!!, workflowModel!!)
-                }
+            if (PreferenceUtils.isMultipleObjectsMode(this)) {
+                MultiObjectProcessor(graphicOverlay!!, workflowModel!!)
+            } else {
+                ProminentObjectProcessor(graphicOverlay!!, workflowModel!!)
+            }
         )
         workflowModel?.setWorkflowState(WorkflowState.DETECTING)
     }
 
     override fun onPause() {
         super.onPause()
+
+        session?.pause()
+
         currentWorkflowState = WorkflowState.NOT_STARTED
         stopCameraPreview()
     }
@@ -201,44 +273,44 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private fun setUpBottomSheet() {
         bottomSheetBehavior = BottomSheetBehavior.from(findViewById(R.id.bottom_sheet))
         bottomSheetBehavior?.setBottomSheetCallback(
-                object : BottomSheetBehavior.BottomSheetCallback() {
-                    override fun onStateChanged(bottomSheet: View, newState: Int) {
-                        Log.d(TAG, "Bottom sheet new state: $newState")
-                        bottomSheetScrimView?.visibility = if (newState == BottomSheetBehavior.STATE_HIDDEN) View.GONE else View.VISIBLE
-                        graphicOverlay?.clear()
+            object : BottomSheetBehavior.BottomSheetCallback() {
+                override fun onStateChanged(bottomSheet: View, newState: Int) {
+                    Log.d(TAG, "Bottom sheet new state: $newState")
+                    bottomSheetScrimView?.visibility = if (newState == BottomSheetBehavior.STATE_HIDDEN) View.GONE else View.VISIBLE
+                    graphicOverlay?.clear()
 
-                        when (newState) {
-                            BottomSheetBehavior.STATE_HIDDEN -> workflowModel?.setWorkflowState(WorkflowState.DETECTING)
-                            BottomSheetBehavior.STATE_COLLAPSED, BottomSheetBehavior.STATE_EXPANDED, BottomSheetBehavior.STATE_HALF_EXPANDED -> slidingSheetUpFromHiddenState = false
-                            BottomSheetBehavior.STATE_DRAGGING, BottomSheetBehavior.STATE_SETTLING -> {
-                            }
-
+                    when (newState) {
+                        BottomSheetBehavior.STATE_HIDDEN -> workflowModel?.setWorkflowState(WorkflowState.DETECTING)
+                        BottomSheetBehavior.STATE_COLLAPSED, BottomSheetBehavior.STATE_EXPANDED, BottomSheetBehavior.STATE_HALF_EXPANDED -> slidingSheetUpFromHiddenState = false
+                        BottomSheetBehavior.STATE_DRAGGING, BottomSheetBehavior.STATE_SETTLING -> {
                         }
+
+                    }
+                }
+
+                override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                    val searchedObject = workflowModel!!.searchedObject.value
+                    if (searchedObject == null || java.lang.Float.isNaN(slideOffset)) {
+                        return
                     }
 
-                    override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                        val searchedObject = workflowModel!!.searchedObject.value
-                        if (searchedObject == null || java.lang.Float.isNaN(slideOffset)) {
-                            return
-                        }
+                    val graphicOverlay = graphicOverlay ?: return
+                    val bottomSheetBehavior = bottomSheetBehavior ?: return
+                    val collapsedStateHeight = Math.min(bottomSheetBehavior.peekHeight, bottomSheet.height)
+                    val bottomBitmap = objectThumbnailForBottomSheet ?: return
+                    if (slidingSheetUpFromHiddenState) {
+                        val thumbnailSrcRect = graphicOverlay.translateRect(searchedObject.boundingBox)
+                        bottomSheetScrimView?.updateWithThumbnailTranslateAndScale(
+                            bottomBitmap,
+                            collapsedStateHeight,
+                            slideOffset,
+                            thumbnailSrcRect)
 
-                        val graphicOverlay = graphicOverlay ?: return
-                        val bottomSheetBehavior = bottomSheetBehavior ?: return
-                        val collapsedStateHeight = Math.min(bottomSheetBehavior.peekHeight, bottomSheet.height)
-                        val bottomBitmap = objectThumbnailForBottomSheet ?: return
-                        if (slidingSheetUpFromHiddenState) {
-                            val thumbnailSrcRect = graphicOverlay.translateRect(searchedObject.boundingBox)
-                            bottomSheetScrimView?.updateWithThumbnailTranslateAndScale(
-                                    bottomBitmap,
-                                    collapsedStateHeight,
-                                    slideOffset,
-                                    thumbnailSrcRect)
-
-                        } else {
-                            bottomSheetScrimView?.updateWithThumbnailTranslate(bottomBitmap, collapsedStateHeight, slideOffset, bottomSheet)
-                        }
+                    } else {
+                        bottomSheetScrimView?.updateWithThumbnailTranslate(bottomBitmap, collapsedStateHeight, slideOffset, bottomSheet)
                     }
-                })
+                }
+            })
 
         bottomSheetScrimView = findViewById<BottomSheetScrimView>(R.id.bottom_sheet_scrim_view).apply {
             setOnClickListener(this@LiveObjectDetectionActivity)
@@ -284,8 +356,8 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                 val productList = searchedObject.productList
                 objectThumbnailForBottomSheet = searchedObject.getObjectThumbnail()
                 bottomSheetTitleView?.text = resources
-                        .getQuantityString(
-                                R.plurals.bottom_sheet_title, productList.size, productList.size)
+                    .getQuantityString(
+                        R.plurals.bottom_sheet_title, productList.size, productList.size)
                 productRecyclerView?.adapter = ProductAdapter(productList)
                 slidingSheetUpFromHiddenState = true
                 bottomSheetBehavior?.peekHeight =
@@ -304,10 +376,10 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             WorkflowState.DETECTING, WorkflowState.DETECTED, WorkflowState.CONFIRMING -> {
                 promptChip?.visibility = View.VISIBLE
                 promptChip?.setText(
-                        if (workflowState == WorkflowState.CONFIRMING)
-                            R.string.prompt_hold_camera_steady
-                        else
-                            R.string.prompt_point_at_an_object)
+                    if (workflowState == WorkflowState.CONFIRMING)
+                        R.string.prompt_hold_camera_steady
+                    else
+                        R.string.prompt_point_at_an_object)
                 startCameraPreview()
             }
             WorkflowState.CONFIRMED -> {
