@@ -25,6 +25,13 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
+    applicationVariants.all { variant ->
+        variant.getRuntimeConfiguration().exclude group: 'com.google.code.findbugs', module: 'jsr305'
+        variant.getRuntimeConfiguration().exclude group: 'com.google.j2objc', module: 'j2objc-annotations'
+        variant.getRuntimeConfiguration().exclude group: 'org.checkerframework', module: 'checker-compat-qual'
+        variant.getRuntimeConfiguration().exclude group: 'org.codehaus.mojo', module: 'animal-sniffer-annotations'
+    }
 }
 
 androidExtensions {
@@ -32,9 +39,10 @@ androidExtensions {
 }
 
 dependencies {
+
     implementation 'com.android.support:preference-v7:28.0.0'
     implementation 'com.android.volley:volley:1.1.1'
-    implementation 'com.google.android.material:material:1.1.0-alpha06'
+    implementation 'com.google.android.material:material:1.1.0-alpha07'
     implementation "android.arch.lifecycle:extensions:1.1.1"
     implementation "androidx.annotation:annotation:1.0.2"
     implementation "androidx.core:core-ktx:1.0.2"
@@ -47,13 +55,11 @@ dependencies {
 
     api 'com.google.guava:guava:27.0.1-android'
 
-    // ARCore library
-    implementation 'com.google.ar:core:1.9.0'
 
     // Provides ArFragment, and other Sceneform UX resources:
     implementation "com.google.ar.sceneform.ux:sceneform-ux:1.9.0"
 
-    implementation "com.android.support:appcompat-v7:28.0.0"
 }
 
 apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.google.ar.sceneform.plugin'
