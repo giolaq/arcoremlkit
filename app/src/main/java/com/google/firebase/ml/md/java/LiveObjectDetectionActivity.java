@@ -21,22 +21,38 @@ import android.animation.AnimatorSet;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.ImageFormat;
 import android.graphics.RectF;
 import android.hardware.Camera;
+import android.media.Image;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProviders;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import com.google.ar.core.Config;
+import com.google.ar.core.Frame;
+import com.google.ar.core.Session;
+import com.google.ar.core.exceptions.CameraNotAvailableException;
+import com.google.ar.core.exceptions.UnavailableApkTooOldException;
+import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
+import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
+import com.google.ar.sceneform.ArSceneView;
+import com.google.ar.sceneform.FrameTime;
+import com.google.ar.sceneform.rendering.ModelRenderable;
+import com.google.ar.sceneform.ux.ArFragment;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 import com.google.firebase.ml.md.R;
@@ -54,364 +70,464 @@ import com.google.firebase.ml.md.java.productsearch.SearchEngine;
 import com.google.firebase.ml.md.java.productsearch.SearchedObject;
 import com.google.firebase.ml.md.java.settings.PreferenceUtils;
 import com.google.firebase.ml.md.java.settings.SettingsActivity;
+
 import java.io.IOException;
 import java.util.List;
 
-/** Demonstrates the object detection and visual search workflow using camera preview. */
+/**
+ * Demonstrates the object detection and visual search workflow using camera preview.
+ */
 public class LiveObjectDetectionActivity extends AppCompatActivity implements OnClickListener {
 
-  private static final String TAG = "LiveObjectActivity";
+    private static final String TAG = "LiveObjectActivity";
 
-  private CameraSource cameraSource;
-  private CameraSourcePreview preview;
-  private GraphicOverlay graphicOverlay;
-  private View settingsButton;
-  private View flashButton;
-  private Chip promptChip;
-  private AnimatorSet promptChipAnimator;
-  private ExtendedFloatingActionButton searchButton;
-  private AnimatorSet searchButtonAnimator;
-  private ProgressBar searchProgressBar;
-  private WorkflowModel workflowModel;
-  private WorkflowState currentWorkflowState;
-  private SearchEngine searchEngine;
+    private CameraSource cameraSource;
+    private FrameLayout preview;
+    private GraphicOverlay graphicOverlay;
+    private View settingsButton;
+    private View flashButton;
+    private Chip promptChip;
+    private AnimatorSet promptChipAnimator;
+    private ExtendedFloatingActionButton searchButton;
+    private AnimatorSet searchButtonAnimator;
+    private ProgressBar searchProgressBar;
+    private WorkflowModel workflowModel;
+    private WorkflowState currentWorkflowState;
+    private SearchEngine searchEngine;
 
-  private BottomSheetBehavior<View> bottomSheetBehavior;
-  private BottomSheetScrimView bottomSheetScrimView;
-  private RecyclerView productRecyclerView;
-  private TextView bottomSheetTitleView;
-  private Bitmap objectThumbnailForBottomSheet;
-  private boolean slidingSheetUpFromHiddenState;
+    private BottomSheetBehavior<View> bottomSheetBehavior;
+    private BottomSheetScrimView bottomSheetScrimView;
+    private RecyclerView productRecyclerView;
+    private TextView bottomSheetTitleView;
+    private Bitmap objectThumbnailForBottomSheet;
+    private boolean slidingSheetUpFromHiddenState;
 
-  @Override
-  protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
+    private ArFragment arFragment;
+    private Session session;
+    private ArSceneView sceneView;
+    private boolean shouldConfigureSession = false;
 
-    searchEngine = new SearchEngine(getApplicationContext());
 
-    setContentView(R.layout.activity_live_object);
-    preview = findViewById(R.id.camera_preview);
-    graphicOverlay = findViewById(R.id.camera_preview_graphic_overlay);
-    graphicOverlay.setOnClickListener(this);
-    cameraSource = new CameraSource(graphicOverlay);
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
-    promptChip = findViewById(R.id.bottom_prompt_chip);
-    promptChipAnimator =
-        (AnimatorSet) AnimatorInflater.loadAnimator(this, R.animator.bottom_prompt_chip_enter);
-    promptChipAnimator.setTarget(promptChip);
+        searchEngine = new SearchEngine(getApplicationContext());
 
-    searchButton = findViewById(R.id.product_search_button);
-    searchButton.setOnClickListener(this);
-    searchButtonAnimator =
-        (AnimatorSet) AnimatorInflater.loadAnimator(this, R.animator.search_button_enter);
-    searchButtonAnimator.setTarget(searchButton);
+        setContentView(R.layout.activity_live_object);
 
-    searchProgressBar = findViewById(R.id.search_progress_bar);
+        arFragment = (ArFragment) getSupportFragmentManager().findFragmentById(R.id.ux_fragment);
+        sceneView = arFragment.getArSceneView();
 
-    setUpBottomSheet();
+        preview = findViewById(R.id.camera_preview);
+        graphicOverlay = findViewById(R.id.camera_preview_graphic_overlay);
+        graphicOverlay.setOnClickListener(this);
+        cameraSource = new CameraSource(graphicOverlay);
 
-    findViewById(R.id.close_button).setOnClickListener(this);
-    flashButton = findViewById(R.id.flash_button);
-    flashButton.setOnClickListener(this);
-    settingsButton = findViewById(R.id.settings_button);
-    settingsButton.setOnClickListener(this);
+        promptChip = findViewById(R.id.bottom_prompt_chip);
+        promptChipAnimator =
+            (AnimatorSet) AnimatorInflater.loadAnimator(this, R.animator.bottom_prompt_chip_enter);
+        promptChipAnimator.setTarget(promptChip);
 
-    setUpWorkflowModel();
-  }
+        searchButton = findViewById(R.id.product_search_button);
+        searchButton.setOnClickListener(this);
+        searchButtonAnimator =
+            (AnimatorSet) AnimatorInflater.loadAnimator(this, R.animator.search_button_enter);
+        searchButtonAnimator.setTarget(searchButton);
 
-  @Override
-  protected void onResume() {
-    super.onResume();
+        searchProgressBar = findViewById(R.id.search_progress_bar);
 
-    workflowModel.markCameraFrozen();
-    settingsButton.setEnabled(true);
-    bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-    currentWorkflowState = WorkflowState.NOT_STARTED;
-    cameraSource.setFrameProcessor(
-        PreferenceUtils.isMultipleObjectsMode(this)
-            ? new MultiObjectProcessor(graphicOverlay, workflowModel)
-            : new ProminentObjectProcessor(graphicOverlay, workflowModel));
-    workflowModel.setWorkflowState(WorkflowState.DETECTING);
-  }
+        setUpBottomSheet();
 
-  @Override
-  protected void onPause() {
-    super.onPause();
-    currentWorkflowState = WorkflowState.NOT_STARTED;
-    stopCameraPreview();
-  }
+        findViewById(R.id.close_button).setOnClickListener(this);
+        flashButton = findViewById(R.id.flash_button);
+        flashButton.setOnClickListener(this);
+        settingsButton = findViewById(R.id.settings_button);
+        settingsButton.setOnClickListener(this);
 
-  @Override
-  protected void onDestroy() {
-    super.onDestroy();
-    if (cameraSource != null) {
-      cameraSource.release();
-      cameraSource = null;
-    }
-    searchEngine.shutdown();
-  }
+        setUpWorkflowModel();
 
-  @Override
-  public void onBackPressed() {
-    if (bottomSheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN) {
-      bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-    } else {
-      super.onBackPressed();
-    }
-  }
-
-  @Override
-  public void onClick(View view) {
-    int id = view.getId();
-    if (id == R.id.product_search_button) {
-      searchButton.setEnabled(false);
-      workflowModel.onSearchButtonClicked();
-
-    } else if (id == R.id.bottom_sheet_scrim_view) {
-      bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
-
-    } else if (id == R.id.close_button) {
-      onBackPressed();
-
-    } else if (id == R.id.flash_button) {
-      if (flashButton.isSelected()) {
-        flashButton.setSelected(false);
-        cameraSource.updateFlashMode(Camera.Parameters.FLASH_MODE_OFF);
-      } else {
-        flashButton.setSelected(true);
-        cameraSource.updateFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
-      }
-
-    } else if (id == R.id.settings_button) {
-      // Sets as disabled to prevent the user from clicking on it too fast.
-      settingsButton.setEnabled(false);
-      startActivity(new Intent(this, SettingsActivity.class));
+        arFragment.getArSceneView().getScene().addOnUpdateListener(this::onSceneUpdate);
 
     }
-  }
 
-  private void startCameraPreview() {
-    if (!workflowModel.isCameraLive() && cameraSource != null) {
-      try {
-        workflowModel.markCameraLive();
-        preview.start(cameraSource);
-      } catch (IOException e) {
-        Log.e(TAG, "Failed to start camera preview!", e);
-        cameraSource.release();
-        cameraSource = null;
-      }
-    }
-  }
+    @Override
+    protected void onResume() {
+        super.onResume();
 
-  private void stopCameraPreview() {
-    if (workflowModel.isCameraLive()) {
-      workflowModel.markCameraFrozen();
-      flashButton.setSelected(false);
-      preview.stop();
-    }
-  }
 
-  private void setUpBottomSheet() {
-    bottomSheetBehavior = BottomSheetBehavior.from(findViewById(R.id.bottom_sheet));
-    bottomSheetBehavior.setBottomSheetCallback(
-        new BottomSheetBehavior.BottomSheetCallback() {
-          @Override
-          public void onStateChanged(@NonNull View bottomSheet, int newState) {
-            Log.d(TAG, "Bottom sheet new state: " + newState);
-            bottomSheetScrimView.setVisibility(
-                newState == BottomSheetBehavior.STATE_HIDDEN ? View.GONE : View.VISIBLE);
-            graphicOverlay.clear();
+        if (session == null) {
+            Exception exception = null;
+            String message = null;
+            try {
 
-            switch (newState) {
-              case BottomSheetBehavior.STATE_HIDDEN:
-                workflowModel.setWorkflowState(WorkflowState.DETECTING);
-                break;
-              case BottomSheetBehavior.STATE_COLLAPSED:
-              case BottomSheetBehavior.STATE_EXPANDED:
-              case BottomSheetBehavior.STATE_HALF_EXPANDED:
-                slidingSheetUpFromHiddenState = false;
-                break;
-              case BottomSheetBehavior.STATE_DRAGGING:
-              case BottomSheetBehavior.STATE_SETTLING:
-              default:
-                break;
-            }
-          }
-
-          @Override
-          public void onSlide(@NonNull View bottomSheet, float slideOffset) {
-            SearchedObject searchedObject = workflowModel.searchedObject.getValue();
-            if (searchedObject == null || Float.isNaN(slideOffset)) {
-              return;
+                session = new Session(/* context = */ this);
+            } catch (UnavailableArcoreNotInstalledException e) {
+                message = "Please install ARCore";
+                exception = e;
+            } catch (UnavailableApkTooOldException e) {
+                message = "Please update ARCore";
+                exception = e;
+            } catch (UnavailableSdkTooOldException e) {
+                message = "Please update this app";
+                exception = e;
+            } catch (Exception e) {
+                message = "This device does not support AR";
+                exception = e;
             }
 
-            int collapsedStateHeight =
-                Math.min(bottomSheetBehavior.getPeekHeight(), bottomSheet.getHeight());
-            if (slidingSheetUpFromHiddenState) {
-              RectF thumbnailSrcRect =
-                  graphicOverlay.translateRect(searchedObject.getBoundingBox());
-              bottomSheetScrimView.updateWithThumbnailTranslateAndScale(
-                  objectThumbnailForBottomSheet,
-                  collapsedStateHeight,
-                  slideOffset,
-                  thumbnailSrcRect);
-
-            } else {
-              bottomSheetScrimView.updateWithThumbnailTranslate(
-                  objectThumbnailForBottomSheet, collapsedStateHeight, slideOffset, bottomSheet);
+            if (message != null) {
+                Log.e(TAG, "Exception creating session", exception);
+                return;
             }
-          }
-        });
 
-    bottomSheetScrimView = findViewById(R.id.bottom_sheet_scrim_view);
-    bottomSheetScrimView.setOnClickListener(this);
+            shouldConfigureSession = true;
+        }
 
-    bottomSheetTitleView = findViewById(R.id.bottom_sheet_title);
-    productRecyclerView = findViewById(R.id.product_recycler_view);
-    productRecyclerView.setHasFixedSize(true);
-    productRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-    productRecyclerView.setAdapter(new ProductAdapter(ImmutableList.of()));
-  }
+        if (shouldConfigureSession) {
+            configureSession();
+            shouldConfigureSession = false;
+            sceneView.setupSession(session);
+        }
 
-  private void setUpWorkflowModel() {
-    workflowModel = ViewModelProviders.of(this).get(WorkflowModel.class);
-
-    // Observes the workflow state changes, if happens, update the overlay view indicators and
-    // camera preview state.
-    workflowModel.workflowState.observe(
-        this,
-        workflowState -> {
-          if (workflowState == null || Objects.equal(currentWorkflowState, workflowState)) {
+        // Note that order matters - see the note in onPause(), the reverse applies here.
+        try {
+            session.resume();
+            sceneView.resume();
+        } catch (CameraNotAvailableException e) {
+            // In some cases (such as another camera app launching) the camera may be given to
+            // a different app instead. Handle this properly by showing a message and recreate the
+            // session at the next iteration.
+            session = null;
             return;
-          }
+        }
 
-          currentWorkflowState = workflowState;
-          Log.d(TAG, "Current workflow state: " + currentWorkflowState.name());
 
-          if (PreferenceUtils.isAutoSearchEnabled(this)) {
-            stateChangeInAutoSearchMode(workflowState);
-          } else {
-            stateChangeInManualSearchMode(workflowState);
-          }
-        });
-
-    // Observes changes on the object to search, if happens, fire product search request.
-    workflowModel.objectToSearch.observe(
-        this, object -> searchEngine.search(object, workflowModel));
-
-    // Observes changes on the object that has search completed, if happens, show the bottom sheet
-    // to present search result.
-    workflowModel.searchedObject.observe(
-        this,
-        searchedObject -> {
-          if (searchedObject != null) {
-            List<Product> productList = searchedObject.getProductList();
-            objectThumbnailForBottomSheet = searchedObject.getObjectThumbnail();
-            bottomSheetTitleView.setText(
-                getResources()
-                    .getQuantityString(
-                        R.plurals.bottom_sheet_title, productList.size(), productList.size()));
-            productRecyclerView.setAdapter(new ProductAdapter(productList));
-            slidingSheetUpFromHiddenState = true;
-            bottomSheetBehavior.setPeekHeight(preview.getHeight() / 2);
-            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
-          }
-        });
-  }
-
-  private void stateChangeInAutoSearchMode(WorkflowState workflowState) {
-    boolean wasPromptChipGone = (promptChip.getVisibility() == View.GONE);
-
-    searchButton.setVisibility(View.GONE);
-    searchProgressBar.setVisibility(View.GONE);
-    switch (workflowState) {
-      case DETECTING:
-      case DETECTED:
-      case CONFIRMING:
-        promptChip.setVisibility(View.VISIBLE);
-        promptChip.setText(
-            workflowState == WorkflowState.CONFIRMING
-                ? R.string.prompt_hold_camera_steady
-                : R.string.prompt_point_at_an_object);
-        startCameraPreview();
-        break;
-      case CONFIRMED:
-        promptChip.setVisibility(View.VISIBLE);
-        promptChip.setText(R.string.prompt_searching);
-        stopCameraPreview();
-        break;
-      case SEARCHING:
-        searchProgressBar.setVisibility(View.VISIBLE);
-        promptChip.setVisibility(View.VISIBLE);
-        promptChip.setText(R.string.prompt_searching);
-        stopCameraPreview();
-        break;
-      case SEARCHED:
-        promptChip.setVisibility(View.GONE);
-        stopCameraPreview();
-        break;
-      default:
-        promptChip.setVisibility(View.GONE);
-        break;
+        workflowModel.markCameraFrozen();
+        settingsButton.setEnabled(true);
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        currentWorkflowState = WorkflowState.NOT_STARTED;
+        cameraSource.setFrameProcessor(
+            PreferenceUtils.isMultipleObjectsMode(this)
+                ? new MultiObjectProcessor(graphicOverlay, workflowModel)
+                : new ProminentObjectProcessor(graphicOverlay, workflowModel));
+        workflowModel.setWorkflowState(WorkflowState.DETECTING);
     }
 
-    boolean shouldPlayPromptChipEnteringAnimation =
-        wasPromptChipGone && (promptChip.getVisibility() == View.VISIBLE);
-    if (shouldPlayPromptChipEnteringAnimation && !promptChipAnimator.isRunning()) {
-      promptChipAnimator.start();
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        if (session != null) {
+            sceneView.pause();
+            session.pause();
+        }
+
+        currentWorkflowState = WorkflowState.NOT_STARTED;
+        stopCameraPreview();
     }
-  }
 
-  private void stateChangeInManualSearchMode(WorkflowState workflowState) {
-    boolean wasPromptChipGone = (promptChip.getVisibility() == View.GONE);
-    boolean wasSearchButtonGone = (searchButton.getVisibility() == View.GONE);
+    private void configureSession() {
+        Config config = new Config(session);
+        config.setUpdateMode(Config.UpdateMode.LATEST_CAMERA_IMAGE);
+        session.configure(config);
+    }
 
-    searchProgressBar.setVisibility(View.GONE);
-    switch (workflowState) {
-      case DETECTING:
-      case DETECTED:
-      case CONFIRMING:
-        promptChip.setVisibility(View.VISIBLE);
-        promptChip.setText(R.string.prompt_point_at_an_object);
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (cameraSource != null) {
+            cameraSource.release();
+            cameraSource = null;
+        }
+        searchEngine.shutdown();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (bottomSheetBehavior.getState() != BottomSheetBehavior.STATE_HIDDEN) {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    public void onClick(View view) {
+        int id = view.getId();
+        if (id == R.id.product_search_button) {
+            searchButton.setEnabled(false);
+            workflowModel.onSearchButtonClicked();
+
+        } else if (id == R.id.bottom_sheet_scrim_view) {
+            bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+
+        } else if (id == R.id.close_button) {
+            onBackPressed();
+
+        } else if (id == R.id.flash_button) {
+            if (flashButton.isSelected()) {
+                flashButton.setSelected(false);
+                cameraSource.updateFlashMode(Camera.Parameters.FLASH_MODE_OFF);
+            } else {
+                flashButton.setSelected(true);
+                cameraSource.updateFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
+            }
+
+        } else if (id == R.id.settings_button) {
+            // Sets as disabled to prevent the user from clicking on it too fast.
+            settingsButton.setEnabled(false);
+            startActivity(new Intent(this, SettingsActivity.class));
+
+        }
+    }
+
+    private void startCameraPreview() {
+        if (!workflowModel.isCameraLive() && cameraSource != null) {
+            //try {
+            workflowModel.markCameraLive();
+            // preview.start(cameraSource);
+//      } catch (IOException e) {
+//        Log.e(TAG, "Failed to start camera preview!", e);
+//        cameraSource.release();
+//        cameraSource = null;
+//      }
+        }
+    }
+
+    private void stopCameraPreview() {
+        if (workflowModel.isCameraLive()) {
+            workflowModel.markCameraFrozen();
+            flashButton.setSelected(false);
+            // preview.stop();
+        }
+    }
+
+    private void setUpBottomSheet() {
+        bottomSheetBehavior = BottomSheetBehavior.from(findViewById(R.id.bottom_sheet));
+        bottomSheetBehavior.setBottomSheetCallback(
+            new BottomSheetBehavior.BottomSheetCallback() {
+                @Override
+                public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                    Log.d(TAG, "Bottom sheet new state: " + newState);
+                    bottomSheetScrimView.setVisibility(
+                        newState == BottomSheetBehavior.STATE_HIDDEN ? View.GONE : View.VISIBLE);
+                    graphicOverlay.clear();
+
+                    switch (newState) {
+                        case BottomSheetBehavior.STATE_HIDDEN:
+                            workflowModel.setWorkflowState(WorkflowState.DETECTING);
+                            break;
+                        case BottomSheetBehavior.STATE_COLLAPSED:
+                        case BottomSheetBehavior.STATE_EXPANDED:
+                        case BottomSheetBehavior.STATE_HALF_EXPANDED:
+                            slidingSheetUpFromHiddenState = false;
+                            break;
+                        case BottomSheetBehavior.STATE_DRAGGING:
+                        case BottomSheetBehavior.STATE_SETTLING:
+                        default:
+                            break;
+                    }
+                }
+
+                @Override
+                public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+                    SearchedObject searchedObject = workflowModel.searchedObject.getValue();
+                    if (searchedObject == null || Float.isNaN(slideOffset)) {
+                        return;
+                    }
+
+                    int collapsedStateHeight =
+                        Math.min(bottomSheetBehavior.getPeekHeight(), bottomSheet.getHeight());
+                    if (slidingSheetUpFromHiddenState) {
+                        RectF thumbnailSrcRect =
+                            graphicOverlay.translateRect(searchedObject.getBoundingBox());
+                        bottomSheetScrimView.updateWithThumbnailTranslateAndScale(
+                            objectThumbnailForBottomSheet,
+                            collapsedStateHeight,
+                            slideOffset,
+                            thumbnailSrcRect);
+
+                    } else {
+                        bottomSheetScrimView.updateWithThumbnailTranslate(
+                            objectThumbnailForBottomSheet, collapsedStateHeight, slideOffset, bottomSheet);
+                    }
+                }
+            });
+
+        bottomSheetScrimView = findViewById(R.id.bottom_sheet_scrim_view);
+        bottomSheetScrimView.setOnClickListener(this);
+
+        bottomSheetTitleView = findViewById(R.id.bottom_sheet_title);
+        productRecyclerView = findViewById(R.id.product_recycler_view);
+        productRecyclerView.setHasFixedSize(true);
+        productRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        productRecyclerView.setAdapter(new ProductAdapter(ImmutableList.of()));
+    }
+
+    private void setUpWorkflowModel() {
+        workflowModel = ViewModelProviders.of(this).get(WorkflowModel.class);
+
+        // Observes the workflow state changes, if happens, update the overlay view indicators and
+        // camera preview state.
+        workflowModel.workflowState.observe(
+            this,
+            workflowState -> {
+                if (workflowState == null || Objects.equal(currentWorkflowState, workflowState)) {
+                    return;
+                }
+
+                currentWorkflowState = workflowState;
+                Log.d(TAG, "Current workflow state: " + currentWorkflowState.name());
+
+                if (PreferenceUtils.isAutoSearchEnabled(this)) {
+                    stateChangeInAutoSearchMode(workflowState);
+                } else {
+                    stateChangeInManualSearchMode(workflowState);
+                }
+            });
+
+        // Observes changes on the object to search, if happens, fire product search request.
+        workflowModel.objectToSearch.observe(
+            this, object -> searchEngine.search(object, workflowModel));
+
+        // Observes changes on the object that has search completed, if happens, show the bottom sheet
+        // to present search result.
+        workflowModel.searchedObject.observe(
+            this,
+            searchedObject -> {
+                if (searchedObject != null) {
+                    List<Product> productList = searchedObject.getProductList();
+                    objectThumbnailForBottomSheet = searchedObject.getObjectThumbnail();
+                    bottomSheetTitleView.setText(
+                        getResources()
+                            .getQuantityString(
+                                R.plurals.bottom_sheet_title, productList.size(), productList.size()));
+                    productRecyclerView.setAdapter(new ProductAdapter(productList));
+                    slidingSheetUpFromHiddenState = true;
+                    bottomSheetBehavior.setPeekHeight(preview.getHeight() / 2);
+                    bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+                }
+            });
+    }
+
+    private void stateChangeInAutoSearchMode(WorkflowState workflowState) {
+        boolean wasPromptChipGone = (promptChip.getVisibility() == View.GONE);
+
         searchButton.setVisibility(View.GONE);
-        startCameraPreview();
-        break;
-      case CONFIRMED:
-        promptChip.setVisibility(View.GONE);
-        searchButton.setVisibility(View.VISIBLE);
-        searchButton.setEnabled(true);
-        searchButton.setBackgroundColor(Color.WHITE);
-        startCameraPreview();
-        break;
-      case SEARCHING:
-        promptChip.setVisibility(View.GONE);
-        searchButton.setVisibility(View.VISIBLE);
-        searchButton.setEnabled(false);
-        searchButton.setBackgroundColor(Color.GRAY);
-        searchProgressBar.setVisibility(View.VISIBLE);
-        stopCameraPreview();
-        break;
-      case SEARCHED:
-        promptChip.setVisibility(View.GONE);
-        searchButton.setVisibility(View.GONE);
-        stopCameraPreview();
-        break;
-      default:
-        promptChip.setVisibility(View.GONE);
-        searchButton.setVisibility(View.GONE);
-        break;
+        searchProgressBar.setVisibility(View.GONE);
+        switch (workflowState) {
+            case DETECTING:
+            case DETECTED:
+            case CONFIRMING:
+                promptChip.setVisibility(View.VISIBLE);
+                promptChip.setText(
+                    workflowState == WorkflowState.CONFIRMING
+                        ? R.string.prompt_hold_camera_steady
+                        : R.string.prompt_point_at_an_object);
+                startCameraPreview();
+                break;
+            case CONFIRMED:
+                promptChip.setVisibility(View.VISIBLE);
+                promptChip.setText(R.string.prompt_searching);
+                stopCameraPreview();
+                break;
+            case SEARCHING:
+                searchProgressBar.setVisibility(View.VISIBLE);
+                promptChip.setVisibility(View.VISIBLE);
+                promptChip.setText(R.string.prompt_searching);
+                stopCameraPreview();
+                break;
+            case SEARCHED:
+                promptChip.setVisibility(View.GONE);
+                stopCameraPreview();
+                break;
+            default:
+                promptChip.setVisibility(View.GONE);
+                break;
+        }
+
+        boolean shouldPlayPromptChipEnteringAnimation =
+            wasPromptChipGone && (promptChip.getVisibility() == View.VISIBLE);
+        if (shouldPlayPromptChipEnteringAnimation && !promptChipAnimator.isRunning()) {
+            promptChipAnimator.start();
+        }
     }
 
-    boolean shouldPlayPromptChipEnteringAnimation =
-        wasPromptChipGone && (promptChip.getVisibility() == View.VISIBLE);
-    if (shouldPlayPromptChipEnteringAnimation && !promptChipAnimator.isRunning()) {
-      promptChipAnimator.start();
+    private void stateChangeInManualSearchMode(WorkflowState workflowState) {
+        boolean wasPromptChipGone = (promptChip.getVisibility() == View.GONE);
+        boolean wasSearchButtonGone = (searchButton.getVisibility() == View.GONE);
+
+        searchProgressBar.setVisibility(View.GONE);
+        switch (workflowState) {
+            case DETECTING:
+            case DETECTED:
+            case CONFIRMING:
+                promptChip.setVisibility(View.VISIBLE);
+                promptChip.setText(R.string.prompt_point_at_an_object);
+                searchButton.setVisibility(View.GONE);
+                startCameraPreview();
+                break;
+            case CONFIRMED:
+                promptChip.setVisibility(View.GONE);
+                searchButton.setVisibility(View.VISIBLE);
+                searchButton.setEnabled(true);
+                searchButton.setBackgroundColor(Color.WHITE);
+                startCameraPreview();
+                break;
+            case SEARCHING:
+                promptChip.setVisibility(View.GONE);
+                searchButton.setVisibility(View.VISIBLE);
+                searchButton.setEnabled(false);
+                searchButton.setBackgroundColor(Color.GRAY);
+                searchProgressBar.setVisibility(View.VISIBLE);
+                stopCameraPreview();
+                break;
+            case SEARCHED:
+                promptChip.setVisibility(View.GONE);
+                searchButton.setVisibility(View.GONE);
+                stopCameraPreview();
+                break;
+            default:
+                promptChip.setVisibility(View.GONE);
+                searchButton.setVisibility(View.GONE);
+                break;
+        }
+
+        boolean shouldPlayPromptChipEnteringAnimation =
+            wasPromptChipGone && (promptChip.getVisibility() == View.VISIBLE);
+        if (shouldPlayPromptChipEnteringAnimation && !promptChipAnimator.isRunning()) {
+            promptChipAnimator.start();
+        }
+
+        boolean shouldPlaySearchButtonEnteringAnimation =
+            wasSearchButtonGone && (searchButton.getVisibility() == View.VISIBLE);
+        if (shouldPlaySearchButtonEnteringAnimation && !searchButtonAnimator.isRunning()) {
+            searchButtonAnimator.start();
+        }
     }
 
-    boolean shouldPlaySearchButtonEnteringAnimation =
-        wasSearchButtonGone && (searchButton.getVisibility() == View.VISIBLE);
-    if (shouldPlaySearchButtonEnteringAnimation && !searchButtonAnimator.isRunning()) {
-      searchButtonAnimator.start();
+    private void onSceneUpdate(FrameTime frameTime) {
+        if (session == null) {
+            return;
+        }
+
+        Frame frame = sceneView.getArFrame();
+        if (frame == null) {
+            return;
+        }
+        // Copy the camera stream to a bitmap
+        try (Image image = frame.acquireCameraImage()) {
+            if (image.getFormat() != ImageFormat.YUV_420_888) {
+                throw new IllegalArgumentException(
+                    "Expected image in YUV_420_888 format, got format " + image.getFormat());
+            }
+
+            Log.d("Hello", "Image acquired at " + frameTime);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Exception copying image", e);
+        }
     }
-  }
+
 }

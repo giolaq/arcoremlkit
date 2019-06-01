@@ -6,16 +6,22 @@
     android:layout_height="match_parent"
     android:keepScreenOn="true">
 
-  <com.google.firebase.ml.md.kotlin.camera.CameraSourcePreview
-      android:id="@+id/camera_preview"
-      android:layout_width="match_parent"
-      android:layout_height="match_parent">
+    <FrameLayout
+        android:id="@+id/camera_preview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
-    <include layout="@layout/camera_preview_overlay_kotlin"/>
+        <fragment android:name="com.google.ar.sceneform.ux.ArFragment"
+            android:id="@+id/ux_fragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
 
-  </com.google.firebase.ml.md.kotlin.camera.CameraSourcePreview>
+        <include layout="@layout/camera_preview_overlay_kotlin"/>
 
-  <include
+    </FrameLayout>
+
+
+    <include
       layout="@layout/top_action_bar_in_live_camera"
       android:layout_width="match_parent"
       android:layout_height="wrap_content"

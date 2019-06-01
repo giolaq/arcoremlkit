@@ -21,11 +21,13 @@ import android.animation.AnimatorSet
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.ImageFormat
 import android.hardware.Camera
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.View.OnClickListener
+import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -40,6 +42,10 @@ import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Config
 import com.google.ar.core.Session
 import com.google.ar.core.exceptions.*
+import com.google.ar.sceneform.ArSceneView
+import com.google.ar.sceneform.FrameTime
+import com.google.ar.sceneform.Scene
+import com.google.ar.sceneform.ux.ArFragment
 import com.google.common.base.Objects
 import com.google.common.collect.ImmutableList
 import com.google.firebase.ml.md.R
@@ -61,12 +67,8 @@ import java.io.IOException
 /** Demonstrates the object detection and visual search workflow using camera preview.  */
 class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
-    private var session: Session? = null
-    private var config: Config? = null
-    private var installRequested: Boolean = false
-
     private var cameraSource: CameraSource? = null
-    private var preview: CameraSourcePreview? = null
+    private var preview: FrameLayout? = null
     private var graphicOverlay: GraphicOverlay? = null
     private var settingsButton: View? = null
     private var flashButton: View? = null
@@ -86,12 +88,23 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private var objectThumbnailForBottomSheet: Bitmap? = null
     private var slidingSheetUpFromHiddenState: Boolean = false
 
+    private var arFragment: ArFragment? = null
+    private var session: Session? = null
+    private var sceneView: ArSceneView? = null
+    private var shouldConfigureSession = false
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         searchEngine = SearchEngine(applicationContext)
 
         setContentView(R.layout.activity_live_object_kotlin)
+
+        arFragment = supportFragmentManager.findFragmentById(R.id.ux_fragment) as ArFragment?
+        sceneView = arFragment?.getArSceneView()
+
+
         preview = findViewById(R.id.camera_preview)
         graphicOverlay = findViewById<GraphicOverlay>(R.id.camera_preview_graphic_overlay).apply {
             setOnClickListener(this@LiveObjectDetectionActivity)
@@ -117,6 +130,9 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             setOnClickListener(this@LiveObjectDetectionActivity)
         }
         setUpWorkflowModel()
+
+        arFragment?.arSceneView?.scene?.addOnUpdateListener { this.onSceneUpdate(it) }
+
     }
 
     override fun onResume() {
@@ -126,28 +142,9 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             var exception: Exception? = null
             var message: String? = null
             try {
-                when (ArCoreApk.getInstance().requestInstall(this, !installRequested)) {
-                    ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
-                        installRequested = true
-                        return
-                    }
-                    ArCoreApk.InstallStatus.INSTALLED -> {
-                    }
-                }
 
-                // ARCore requires camera permissions to operate. If we did not yet obtain runtime
-                // permission on Android M and above, now is a good time to ask the user for it.
-                if (!CameraPermissionHelper.hasCameraPermission(this)) {
-                    CameraPermissionHelper.requestCameraPermission(this)
-                    return
-                }
-
-                session = Session(/* context= */this)
-                config = Config(session)
+                session = Session(/* context = */this)
             } catch (e: UnavailableArcoreNotInstalledException) {
-                message = "Please install ARCore"
-                exception = e
-            } catch (e: UnavailableUserDeclinedInstallationException) {
                 message = "Please install ARCore"
                 exception = e
             } catch (e: UnavailableApkTooOldException) {
@@ -162,23 +159,30 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             }
 
             if (message != null) {
-               // messageSnackbarHelper.showError(this, message)
                 Log.e(TAG, "Exception creating session", exception)
                 return
             }
+
+            shouldConfigureSession = true
         }
+
+        if (shouldConfigureSession) {
+            configureSession()
+            shouldConfigureSession = false
+            sceneView?.setupSession(session)
+        }
+
         // Note that order matters - see the note in onPause(), the reverse applies here.
         try {
             session?.resume()
+            sceneView?.resume()
         } catch (e: CameraNotAvailableException) {
             // In some cases (such as another camera app launching) the camera may be given to
             // a different app instead. Handle this properly by showing a message and recreate the
             // session at the next iteration.
-            //messageSnackbarHelper.showError(this, "Camera not available. Please restart the app.")
             session = null
             return
         }
-
 
 
 
@@ -196,10 +200,20 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         workflowModel?.setWorkflowState(WorkflowState.DETECTING)
     }
 
+    private fun configureSession() {
+        val config = Config(session)
+        config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+        session?.configure(config)
+    }
+
+
     override fun onPause() {
         super.onPause()
 
-        session?.pause()
+        if (session != null) {
+            sceneView?.pause()
+            session?.pause()
+        }
 
         currentWorkflowState = WorkflowState.NOT_STARTED
         stopCameraPreview()
@@ -251,7 +265,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         if (!workflowModel.isCameraLive) {
             try {
                 workflowModel.markCameraLive()
-                preview?.start(cameraSource)
+                // preview?.start(cameraSource)
 
             } catch (e: IOException) {
                 Log.e(TAG, "Failed to start camera preview!", e)
@@ -266,7 +280,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         if (workflowModel?.isCameraLive == true) {
             workflowModel!!.markCameraFrozen()
             flashButton?.isSelected = false
-            preview?.stop()
+            // preview?.stop()
         }
     }
 
@@ -453,6 +467,30 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         searchButtonAnimator?.let {
             if (shouldPlaySearchButtonEnteringAnimation && !it.isRunning) it.start()
         }
+    }
+
+
+    private fun onSceneUpdate(frameTime: FrameTime) {
+        if (session == null) {
+            return
+        }
+
+        val frame = sceneView?.getArFrame() ?: return
+// Copy the camera stream to a bitmap
+        try {
+            frame.acquireCameraImage().use { image ->
+                if (image.format != ImageFormat.YUV_420_888) {
+                    throw IllegalArgumentException(
+                        "Expected image in YUV_420_888 format, got format " + image.format)
+                }
+
+                Log.d("Hello", "Image acquired at $frameTime")
+
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception copying image", e)
+        }
+
     }
 
     companion object {
