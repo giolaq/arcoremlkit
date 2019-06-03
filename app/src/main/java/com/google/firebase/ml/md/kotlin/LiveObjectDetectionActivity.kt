@@ -49,12 +49,10 @@ import com.google.ar.sceneform.ux.ArFragment
 import com.google.common.base.Objects
 import com.google.common.collect.ImmutableList
 import com.google.firebase.ml.md.R
-import com.google.firebase.ml.md.kotlin.camera.GraphicOverlay
-import com.google.firebase.ml.md.kotlin.camera.WorkflowModel
+import com.google.firebase.ml.md.kotlin.camera.*
 import com.google.firebase.ml.md.kotlin.camera.WorkflowModel.WorkflowState
-import com.google.firebase.ml.md.kotlin.camera.CameraSource
-import com.google.firebase.ml.md.kotlin.camera.CameraSourcePreview
 import com.google.firebase.ml.md.kotlin.helpers.CameraPermissionHelper
+import com.google.firebase.ml.md.kotlin.helpers.ImageConversion
 import com.google.firebase.ml.md.kotlin.objectdetection.MultiObjectProcessor
 import com.google.firebase.ml.md.kotlin.objectdetection.ProminentObjectProcessor
 import com.google.firebase.ml.md.kotlin.productsearch.BottomSheetScrimView
@@ -63,11 +61,13 @@ import com.google.firebase.ml.md.kotlin.productsearch.SearchEngine
 import com.google.firebase.ml.md.kotlin.settings.PreferenceUtils
 import com.google.firebase.ml.md.kotlin.settings.SettingsActivity
 import java.io.IOException
+import java.nio.ByteBuffer
 
 /** Demonstrates the object detection and visual search workflow using camera preview.  */
 class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
-    private var cameraSource: CameraSource? = null
+    //private var cameraSource: CameraSource? = null
+    private var frameSource: FrameSource? = null
     private var preview: FrameLayout? = null
     private var graphicOverlay: GraphicOverlay? = null
     private var settingsButton: View? = null
@@ -102,14 +102,16 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         setContentView(R.layout.activity_live_object_kotlin)
 
         arFragment = supportFragmentManager.findFragmentById(R.id.ux_fragment) as ArFragment?
-        sceneView = arFragment?.getArSceneView()
+        sceneView = arFragment?.arSceneView
 
 
         preview = findViewById(R.id.camera_preview)
         graphicOverlay = findViewById<GraphicOverlay>(R.id.camera_preview_graphic_overlay).apply {
             setOnClickListener(this@LiveObjectDetectionActivity)
-            cameraSource = CameraSource(this)
+            // cameraSource = CameraSource(this)
+            frameSource = FrameSource(this)
         }
+
         promptChip = findViewById(R.id.bottom_prompt_chip)
         promptChipAnimator = (AnimatorInflater.loadAnimator(this, R.animator.bottom_prompt_chip_enter) as AnimatorSet).apply {
             setTarget(promptChip)
@@ -131,7 +133,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         }
         setUpWorkflowModel()
 
-        arFragment?.arSceneView?.scene?.addOnUpdateListener { this.onSceneUpdate(it) }
 
     }
 
@@ -190,14 +191,19 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         settingsButton?.isEnabled = true
         bottomSheetBehavior?.state = BottomSheetBehavior.STATE_HIDDEN
         currentWorkflowState = WorkflowState.NOT_STARTED
-        cameraSource?.setFrameProcessor(
-            if (PreferenceUtils.isMultipleObjectsMode(this)) {
-                MultiObjectProcessor(graphicOverlay!!, workflowModel!!)
-            } else {
-                ProminentObjectProcessor(graphicOverlay!!, workflowModel!!)
-            }
-        )
+        //cameraSource?.setFrameProcessor(
+        // if (PreferenceUtils.isMultipleObjectsMode(this)) {
+        //     MultiObjectProcessor(graphicOverlay!!, workflowModel!!)
+        //  } else {
+        //      ProminentObjectProcessor(graphicOverlay!!, workflowModel!!)
+        //  }
+        //  )
+        frameSource?.setFrameProcessor(MultiObjectProcessor(graphicOverlay!!, workflowModel!!))
+        frameSource?.setSceneView(sceneView)
+        frameSource?.setSession(session)
+
         workflowModel?.setWorkflowState(WorkflowState.DETECTING)
+
     }
 
     private fun configureSession() {
@@ -221,8 +227,8 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        cameraSource?.release()
-        cameraSource = null
+        //cameraSource?.release()
+        // cameraSource = null
         searchEngine?.shutdown()
     }
 
@@ -245,10 +251,10 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             R.id.flash_button -> {
                 if (flashButton?.isSelected == true) {
                     flashButton?.isSelected = false
-                    cameraSource?.updateFlashMode(Camera.Parameters.FLASH_MODE_OFF)
+                    //cameraSource?.updateFlashMode(Camera.Parameters.FLASH_MODE_OFF)
                 } else {
                     flashButton?.isSelected = true
-                    cameraSource?.updateFlashMode(Camera.Parameters.FLASH_MODE_TORCH)
+                    //cameraSource?.updateFlashMode(Camera.Parameters.FLASH_MODE_TORCH)
                 }
             }
             R.id.settings_button -> {
@@ -260,17 +266,20 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     }
 
     private fun startCameraPreview() {
-        val cameraSource = this.cameraSource ?: return
+        // val cameraSource = this.cameraSource ?: return
         val workflowModel = this.workflowModel ?: return
         if (!workflowModel.isCameraLive) {
             try {
                 workflowModel.markCameraLive()
                 // preview?.start(cameraSource)
 
+                frameSource?.start(arFragment?.arSceneView?.scene)
+
+
             } catch (e: IOException) {
                 Log.e(TAG, "Failed to start camera preview!", e)
-                cameraSource.release()
-                this.cameraSource = null
+                // cameraSource.release()
+                // this.cameraSource = null
             }
 
         }
@@ -281,6 +290,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             workflowModel!!.markCameraFrozen()
             flashButton?.isSelected = false
             // preview?.stop()
+            frameSource?.stop()
         }
     }
 
@@ -379,6 +389,8 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                 bottomSheetBehavior?.state = BottomSheetBehavior.STATE_COLLAPSED
             })
         }
+
+
     }
 
     private fun stateChangeInAutoSearchMode(workflowState: WorkflowState) {
@@ -469,29 +481,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         }
     }
 
-
-    private fun onSceneUpdate(frameTime: FrameTime) {
-        if (session == null) {
-            return
-        }
-
-        val frame = sceneView?.getArFrame() ?: return
-// Copy the camera stream to a bitmap
-        try {
-            frame.acquireCameraImage().use { image ->
-                if (image.format != ImageFormat.YUV_420_888) {
-                    throw IllegalArgumentException(
-                        "Expected image in YUV_420_888 format, got format " + image.format)
-                }
-
-                Log.d("Hello", "Image acquired at $frameTime")
-
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception copying image", e)
-        }
-
-    }
 
     companion object {
         private const val TAG = "LiveObjectActivity"

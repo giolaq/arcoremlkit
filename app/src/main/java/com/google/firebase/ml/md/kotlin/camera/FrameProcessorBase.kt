@@ -43,7 +43,7 @@ abstract class FrameProcessorBase<T> : FrameProcessor {
 
     @Synchronized
     override fun process(
-            data: ByteBuffer, frameMetadata: FrameMetadata, graphicOverlay: GraphicOverlay) {
+        data: ByteBuffer, frameMetadata: FrameMetadata, graphicOverlay: GraphicOverlay) {
         latestFrame = data
         latestFrameMetaData = frameMetadata
         if (processingFrame == null && processingFrameMetaData == null) {
@@ -60,27 +60,29 @@ abstract class FrameProcessorBase<T> : FrameProcessor {
         val frame = processingFrame ?: return
         val frameMetaData = processingFrameMetaData ?: return
         val metadata = FirebaseVisionImageMetadata.Builder()
-                .setFormat(FirebaseVisionImageMetadata.IMAGE_FORMAT_NV21)
-                .setWidth(frameMetaData.width)
-                .setHeight(frameMetaData.height)
-                .setRotation(frameMetaData.rotation)
-                .build()
+            .setFormat(FirebaseVisionImageMetadata.IMAGE_FORMAT_NV21)
+            .setWidth(frameMetaData.width)
+            .setHeight(frameMetaData.height)
+            .setRotation(frameMetaData.rotation)
+            .build()
         val image = FirebaseVisionImage.fromByteBuffer(frame, metadata)
         val startMs = SystemClock.elapsedRealtime()
+
+        //TODO: WHat happens here?
         detectInImage(image)
-                .addOnSuccessListener { results ->
-                    Log.d(TAG, "Latency is: " + (SystemClock.elapsedRealtime() - startMs))
-                    this@FrameProcessorBase.onSuccess(image, results, graphicOverlay)
-                    processLatestFrame(graphicOverlay)
-                }
-                .addOnFailureListener { this@FrameProcessorBase.onFailure(it) }
+            .addOnSuccessListener { results ->
+                Log.d(TAG, "Latency is: " + (SystemClock.elapsedRealtime() - startMs))
+                this@FrameProcessorBase.onSuccess(image, results, graphicOverlay)
+                processLatestFrame(graphicOverlay)
+            }
+            .addOnFailureListener { this@FrameProcessorBase.onFailure(it) }
     }
 
     protected abstract fun detectInImage(image: FirebaseVisionImage): Task<T>
 
     /** Be called when the detection succeeds.  */
     protected abstract fun onSuccess(
-            image: FirebaseVisionImage, results: T, graphicOverlay: GraphicOverlay
+        image: FirebaseVisionImage, results: T, graphicOverlay: GraphicOverlay
     )
 
     protected abstract fun onFailure(e: Exception)
