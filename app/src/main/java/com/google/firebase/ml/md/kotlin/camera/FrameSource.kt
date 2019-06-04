@@ -100,10 +100,10 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
     internal fun start(surfaceHolder: SurfaceHolder) {
         if (camera != null) return
 
-        camera = createCamera().apply {
-            setPreviewDisplay(surfaceHolder)
-            startPreview()
-        }
+        //camera = createCamera().apply {
+          //  setPreviewDisplay(surfaceHolder)
+            //startPreview()
+        //}
 
         processingThread = Thread(processingRunnable).apply {
             processingRunnable.setActive(true)
@@ -121,7 +121,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 //            setPreviewDisplay(surfaceHolder)
 //            startPreview()
 //        }
-        scene.addOnUpdateListener { this.onSceneUpdate(it) }
+        scene.addOnUpdateListener { processingRunnable.setNextFrame(it)}
 
 
         processingThread = Thread(processingRunnable).apply {
@@ -209,7 +209,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 
         camera.parameters = parameters
 
-        camera.setPreviewCallbackWithBuffer(processingRunnable::setNextFrame)
+       // camera.setPreviewCallbackWithBuffer(processingRunnable::setNextFrame)
 
         // Four frame buffers are needed for working with the camera:
         //
@@ -343,6 +343,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 
         // These pending variables hold the state associated with the new frame awaiting processing.
         private var pendingFrameData: ByteBuffer? = null
+        private var pendingFrameDataArray: ByteArray? = null
 
         /** Marks the runnable as active/not active. Signals any blocked threads to continue.  */
         internal fun setActive(active: Boolean) {
@@ -352,23 +353,44 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
             }
         }
 
-        /**
-         * Sets the frame data received from the camera. This adds the previous unused frame buffer (if
-         * present) back to the camera, and keeps a pending reference to the frame data for future use.
-         */
-        internal fun setNextFrame(data: ByteArray, camera: Camera) {
+        internal fun setNextFrame(frameTime: FrameTime) {
             synchronized(lock) {
                 pendingFrameData?.let {
-                    camera.addCallbackBuffer(it.array())
-                    pendingFrameData = null
+                    //camera.addCallbackBuffer(it.array())
+                    pendingFrameDataArray = null
                 }
 
-                if (!bytesToByteBuffer.containsKey(data)) {
-                    Log.d(TAG, "Skipping frame. Could not find ByteBuffer associated with the image data from the camera.")
+                //if (!bytesToByteBuffer.containsKey(data)) {
+                  //  Log.d(TAG, "Skipping frame. Could not find ByteBuffer associated with the image data from the camera.")
+                   // return
+                //}
+
+                if (session == null) {
                     return
                 }
 
-                pendingFrameData = bytesToByteBuffer[data]
+                val frame = sceneView?.arFrame ?: return
+// Copy the camera stream to a bitmap
+                try {
+                    frame.acquireCameraImage().use { image ->
+                        if (image.format != ImageFormat.YUV_420_888) {
+                            throw IllegalArgumentException(
+                                "Expected image in YUV_420_888 format, got format " + image.format)
+                        }
+
+                        Log.d("Hello", "Image acquired at $frameTime")
+                        previewSize = Size(image.width, image.height)
+
+                        val data =
+                            ImageConversion.YUV_420_888toNV21(image)
+
+                        pendingFrameDataArray = data
+
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception copying image", e)
+                }
+               // pendingFrameData = bytesToByteBuffer[data]
 
                 // Notify the processor thread if it is waiting on the next frame (see below).
                 lock.notifyAll()
@@ -391,11 +413,11 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
          * FPS setting above to allow for some idle time in between frames.
          */
         override fun run() {
-            var data: ByteBuffer?
+            var data: ByteArray?
 
             while (true) {
                 synchronized(lock) {
-                    while (active && pendingFrameData == null) {
+                    while (active && pendingFrameDataArray == null) {
                         try {
                             // Wait for the next frame to be received from the camera, since we don't have it yet.
                             lock.wait()
@@ -416,12 +438,14 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                     // Hold onto the frame data locally, so that we can use this for detection
                     // below.  We need to clear pendingFrameData to ensure that this buffer isn't
                     // recycled back to the camera before we are done using that data.
-                    data = pendingFrameData
-                    pendingFrameData = null
+                    data = pendingFrameDataArray
+                    pendingFrameDataArray = null
                 }
 
                 try {
                     synchronized(processorLock) {
+                        val rotation = 0
+
                         val frameMetadata = FrameMetadata(previewSize!!.width, previewSize!!.height, rotation)
                         data?.let {
                             frameProcessor?.process(it, frameMetadata, graphicOverlay)
@@ -431,7 +455,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                     Log.e(TAG, "Exception thrown from receiver.", t)
                 } finally {
                     data?.let {
-                        camera?.addCallbackBuffer(it.array())
+                        //camera?.addCallbackBuffer(it.array())
                     }
                 }
             }
@@ -568,9 +592,9 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                 val data =
                     ImageConversion.YUV_420_888toNV21(image)
 
-                val buf = ByteBuffer.wrap(data)
-
-                frameProcessor?.process(buf, frameMetadata, graphicOverlay!!)
+                if(data != null) {
+                    frameProcessor?.process(data, frameMetadata, graphicOverlay!!)
+                }
 
             }
         } catch (e: Exception) {

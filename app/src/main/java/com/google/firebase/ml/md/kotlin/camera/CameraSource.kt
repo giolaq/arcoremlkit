@@ -399,7 +399,7 @@ class CameraSource(private val graphicOverlay: GraphicOverlay) {
                     synchronized(processorLock) {
                         val frameMetadata = FrameMetadata(previewSize!!.width, previewSize!!.height, rotation)
                         data?.let {
-                            frameProcessor?.process(it, frameMetadata, graphicOverlay)
+                           // frameProcessor?.process(it, frameMetadata, graphicOverlay)
                         }
                     }
                 } catch (t: Exception) {

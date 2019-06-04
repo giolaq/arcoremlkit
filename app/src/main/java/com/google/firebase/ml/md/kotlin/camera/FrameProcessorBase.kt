@@ -29,21 +29,21 @@ abstract class FrameProcessorBase<T> : FrameProcessor {
 
     // To keep the latest frame and its metadata.
     @GuardedBy("this")
-    private var latestFrame: ByteBuffer? = null
+    private var latestFrame: ByteArray? = null
 
     @GuardedBy("this")
     private var latestFrameMetaData: FrameMetadata? = null
 
     // To keep the frame and metadata in process.
     @GuardedBy("this")
-    private var processingFrame: ByteBuffer? = null
+    private var processingFrame: ByteArray? = null
 
     @GuardedBy("this")
     private var processingFrameMetaData: FrameMetadata? = null
 
     @Synchronized
     override fun process(
-        data: ByteBuffer, frameMetadata: FrameMetadata, graphicOverlay: GraphicOverlay) {
+        data: ByteArray, frameMetadata: FrameMetadata, graphicOverlay: GraphicOverlay) {
         latestFrame = data
         latestFrameMetaData = frameMetadata
         if (processingFrame == null && processingFrameMetaData == null) {
@@ -65,7 +65,7 @@ abstract class FrameProcessorBase<T> : FrameProcessor {
             .setHeight(frameMetaData.height)
             .setRotation(frameMetaData.rotation)
             .build()
-        val image = FirebaseVisionImage.fromByteBuffer(frame, metadata)
+        val image = FirebaseVisionImage.fromByteArray(frame, metadata)
         val startMs = SystemClock.elapsedRealtime()
 
         //TODO: WHat happens here?
