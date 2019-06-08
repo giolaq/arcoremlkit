@@ -22,14 +22,17 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ImageFormat
+import android.graphics.PointF
 import android.hardware.Camera
 import android.os.Bundle
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.View.OnClickListener
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
@@ -38,14 +41,15 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.chip.Chip
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-import com.google.ar.core.ArCoreApk
-import com.google.ar.core.Config
-import com.google.ar.core.Session
+import com.google.ar.core.*
 import com.google.ar.core.exceptions.*
+import com.google.ar.sceneform.AnchorNode
 import com.google.ar.sceneform.ArSceneView
 import com.google.ar.sceneform.FrameTime
 import com.google.ar.sceneform.Scene
+import com.google.ar.sceneform.rendering.ModelRenderable
 import com.google.ar.sceneform.ux.ArFragment
+import com.google.ar.sceneform.ux.TransformableNode
 import com.google.common.base.Objects
 import com.google.common.collect.ImmutableList
 import com.google.firebase.ml.md.R
@@ -66,6 +70,7 @@ import java.nio.ByteBuffer
 /** Demonstrates the object detection and visual search workflow using camera preview.  */
 class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
+    private var done: Boolean = false
     //private var cameraSource: CameraSource? = null
     private var frameSource: FrameSource? = null
     private var preview: FrameLayout? = null
@@ -92,6 +97,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private var session: Session? = null
     private var sceneView: ArSceneView? = null
     private var shouldConfigureSession = false
+    private var andyRenderable: ModelRenderable? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -132,6 +138,20 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             setOnClickListener(this@LiveObjectDetectionActivity)
         }
         setUpWorkflowModel()
+
+
+        // When you build a Renderable, Sceneform loads its resources in the background while returning
+        // a CompletableFuture. Call thenAccept(), handle(), or check isDone() before calling get().
+        ModelRenderable.builder()
+            .setSource(this, R.raw.andy)
+            .build()
+            .thenAccept { renderable -> andyRenderable = renderable }
+            .exceptionally { throwable ->
+                val toast = Toast.makeText(this, "Unable to load andy renderable", Toast.LENGTH_LONG)
+                toast.setGravity(Gravity.CENTER, 0, 0)
+                toast.show()
+                null
+            }
 
 
     }
@@ -198,7 +218,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         //      ProminentObjectProcessor(graphicOverlay!!, workflowModel!!)
         //  }
         //  )
-        frameSource?.setFrameProcessor(MultiObjectProcessor(graphicOverlay!!, workflowModel!!))
+        frameSource?.setFrameProcessor(ProminentObjectProcessor(graphicOverlay!!, workflowModel!!))
         frameSource?.setSceneView(sceneView)
         frameSource?.setSession(session)
 
@@ -378,15 +398,51 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             searchedObject.observe(this@LiveObjectDetectionActivity, Observer { nullableSearchedObject ->
                 val searchedObject = nullableSearchedObject ?: return@Observer
                 val productList = searchedObject.productList
-                objectThumbnailForBottomSheet = searchedObject.getObjectThumbnail()
-                bottomSheetTitleView?.text = resources
-                    .getQuantityString(
-                        R.plurals.bottom_sheet_title, productList.size, productList.size)
-                productRecyclerView?.adapter = ProductAdapter(productList)
-                slidingSheetUpFromHiddenState = true
-                bottomSheetBehavior?.peekHeight =
-                    preview?.height?.div(2) ?: BottomSheetBehavior.PEEK_HEIGHT_AUTO
-                bottomSheetBehavior?.state = BottomSheetBehavior.STATE_COLLAPSED
+                val box = searchedObject.boundingBox
+                Log.d(TAG, "Found ${box}")
+                graphicOverlay?.clear()
+
+                graphicOverlay?.let {
+                    val center = PointF(
+                        it.translateX((box.left + box.right) / 2f),
+                        it.translateY((box.top + box.bottom) / 2f)
+                    )
+                    val frame = arFragment?.arSceneView?.arFrame
+                    if (frame != null) {
+                        val hits = frame.hitTest(center.x, center.y)
+                        for (hit in hits) {
+                            val trackable = hit.trackable
+                            if (trackable is Plane &&
+                                /*trackable.isPoseInPolygon(hit.hitPose)*/ !done) {
+
+                                // Create the Anchor.
+                                val anchor = hit.createAnchor()
+                                val anchorNode = AnchorNode(anchor)
+                                anchorNode.setParent(arFragment?.arSceneView?.scene)
+
+                                // Create the transformable andy and add it to the anchor.
+                                val andy = TransformableNode(arFragment?.transformationSystem)
+                                andy.setParent(anchorNode)
+                                andy.renderable = andyRenderable
+                                andy.select()
+                                done = true
+                                break
+                            }
+                        }
+                    }
+
+                }
+
+//                objectThumbnailForBottomSheet = searchedObject.getObjectThumbnail()
+//                bottomSheetTitleView?.text = resources
+//                    .getQuantityString(
+//                        R.plurals.bottom_sheet_title, productList.size, productList.size)
+//
+//                productRecyclerView?.adapter = ProductAdapter(productList)
+//                slidingSheetUpFromHiddenState = true
+//                bottomSheetBehavior?.peekHeight =
+//                    preview?.height?.div(2) ?: BottomSheetBehavior.PEEK_HEIGHT_AUTO
+//                bottomSheetBehavior?.state = BottomSheetBehavior.STATE_COLLAPSED
             })
         }
 
