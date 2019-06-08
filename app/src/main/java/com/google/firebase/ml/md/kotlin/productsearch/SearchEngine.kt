@@ -55,7 +55,7 @@ class SearchEngine(context: Context) {
                                 val entityId = label.entityId
                                 val confidence = label.confidence
                                 productList.add(
-                                    Product(/* imageUrl= */"", "Product title $text", "Product subtitle $confidence"))
+                                    Product(/* imageUrl= */"", text, "Product subtitle $confidence"))
 
                             }
                             listener.invoke(detectedObject, productList)

@@ -114,15 +114,23 @@ class WorkflowModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onSearchCompleted(detectedObject: DetectedObject, products: List<Product>) {
-        val lConfirmedObject = confirmedObject
-        if (detectedObject != lConfirmedObject) {
-            // Drops the search result from the object that has lost focus.
-            return
+        val titleList =  products.map { it.title }
+
+        if (titleList.contains("Bag") || titleList.contains("Baggage")  || titleList.contains("Luggage")  || titleList.contains("Backpack")) {
+
+            val lConfirmedObject = confirmedObject
+            if (detectedObject != lConfirmedObject) {
+                // Drops the search result from the object that has lost focus.
+                return
+            }
+
+
+            objectIdsToSearch.remove(detectedObject.objectId)
+            setWorkflowState(WorkflowState.SEARCHED)
+
+            searchedObject.value = SearchedObject(context.resources, lConfirmedObject, products)
+        } else {
+            setWorkflowState(WorkflowState.DETECTING)
         }
-
-        objectIdsToSearch.remove(detectedObject.objectId)
-        setWorkflowState(WorkflowState.SEARCHED)
-
-        searchedObject.value = SearchedObject(context.resources, lConfirmedObject, products)
     }
 }
