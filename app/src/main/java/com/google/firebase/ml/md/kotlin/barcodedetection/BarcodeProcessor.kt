@@ -41,9 +41,9 @@ class BarcodeProcessor(graphicOverlay: GraphicOverlay, private val workflowModel
 
     @MainThread
     override fun onSuccess(
-            image: FirebaseVisionImage,
-            results: List<FirebaseVisionBarcode>,
-            graphicOverlay: GraphicOverlay) {
+        image: FirebaseVisionImage,
+        results: List<FirebaseVisionBarcode>,
+        graphicOverlay: GraphicOverlay) {
 
         if (!workflowModel.isCameraLive) return
 

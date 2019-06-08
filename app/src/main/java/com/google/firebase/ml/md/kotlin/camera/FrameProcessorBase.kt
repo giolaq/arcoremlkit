@@ -22,7 +22,6 @@ import androidx.annotation.GuardedBy
 import com.google.android.gms.tasks.Task
 import com.google.firebase.ml.vision.common.FirebaseVisionImage
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata
-import java.nio.ByteBuffer
 
 /** Abstract base class of [FrameProcessor].  */
 abstract class FrameProcessorBase<T> : FrameProcessor {
@@ -65,6 +64,7 @@ abstract class FrameProcessorBase<T> : FrameProcessor {
             .setHeight(frameMetaData.height)
             .setRotation(frameMetaData.rotation)
             .build()
+
         val image = FirebaseVisionImage.fromByteArray(frame, metadata)
         val startMs = SystemClock.elapsedRealtime()
 

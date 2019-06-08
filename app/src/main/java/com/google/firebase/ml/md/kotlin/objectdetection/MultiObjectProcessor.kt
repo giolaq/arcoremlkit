@@ -73,9 +73,11 @@ class MultiObjectProcessor(graphicOverlay: GraphicOverlay, private val workflowM
 
     @MainThread
     override fun onSuccess(
-            image: FirebaseVisionImage,
-            results: List<FirebaseVisionObject>,
-            graphicOverlay: GraphicOverlay) {
+        image: FirebaseVisionImage,
+        results: List<FirebaseVisionObject>,
+        graphicOverlay: GraphicOverlay) {
+
+
         var objects = results
         if (!workflowModel.isCameraLive) {
             return
@@ -120,6 +122,7 @@ class MultiObjectProcessor(graphicOverlay: GraphicOverlay, private val workflowM
                         objectDotAnimatorArray[trackingId] = this
                     }
                 }
+
                 graphicOverlay.add(
                         ObjectDotGraphic(
                                 graphicOverlay, DetectedObject(result, i, image), objectDotAnimator
@@ -169,7 +172,7 @@ class MultiObjectProcessor(graphicOverlay: GraphicOverlay, private val workflowM
     private fun shouldSelectObject(graphicOverlay: GraphicOverlay, visionObject: FirebaseVisionObject): Boolean {
         // Considers an object as selected when the camera reticle touches the object dot.
         val box = graphicOverlay.translateRect(visionObject.boundingBox)
-        val objectCenter = PointF((box.left + box.right) / 2f, (box.top + box.bottom) / 2f)
+        val objectCenter = PointF((box.left + box.right) / 2f, (box.top + box.bottom)/ 2f)
         val reticleCenter = PointF(graphicOverlay.width / 2f, graphicOverlay.height / 2f)
         val distance = Math.hypot((objectCenter.x - reticleCenter.x).toDouble(), (objectCenter.y - reticleCenter.y).toDouble())
         return distance < objectSelectionDistanceThreshold

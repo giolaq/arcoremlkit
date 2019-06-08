@@ -22,6 +22,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
+import com.google.android.gms.common.images.Size
 import com.google.firebase.ml.md.kotlin.Utils
 import java.util.ArrayList
 
@@ -80,6 +81,17 @@ class GraphicOverlay(context: Context, attrs: AttributeSet) : View(context, attr
      */
     fun setCameraInfo(cameraSource: CameraSource) {
         val previewSize = cameraSource.previewSize ?: return
+        if (Utils.isPortraitMode(context)) {
+            // Swap width and height when in portrait, since camera's natural orientation is landscape.
+            previewWidth = previewSize.height
+            previewHeight = previewSize.width
+        } else {
+            previewWidth = previewSize.width
+            previewHeight = previewSize.height
+        }
+    }
+
+    fun setTransformInfo(previewSize: Size) {
         if (Utils.isPortraitMode(context)) {
             // Swap width and height when in portrait, since camera's natural orientation is landscape.
             previewWidth = previewSize.height

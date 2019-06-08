@@ -36,6 +36,7 @@ import com.google.firebase.ml.md.kotlin.Utils
 import com.google.firebase.ml.md.kotlin.helpers.ImageConversion
 import com.google.firebase.ml.md.kotlin.settings.PreferenceUtils
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata
+import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata.ROTATION_90
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.IdentityHashMap
@@ -121,6 +122,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 //            setPreviewDisplay(surfaceHolder)
 //            startPreview()
 //        }
+        graphicOverlay.setTransformInfo(Size(640, 480))
         scene.addOnUpdateListener { processingRunnable.setNextFrame(it)}
 
 
@@ -378,6 +380,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                                 "Expected image in YUV_420_888 format, got format " + image.format)
                         }
 
+                        //TODO: Modify the preview size to make the overlay accordingly
                         Log.d("Hello", "Image acquired at $frameTime")
                         previewSize = Size(image.width, image.height)
 
@@ -444,7 +447,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 
                 try {
                     synchronized(processorLock) {
-                        val rotation = 0
+                        val rotation = ROTATION_90
 
                         val frameMetadata = FrameMetadata(previewSize!!.width, previewSize!!.height, rotation)
                         data?.let {
