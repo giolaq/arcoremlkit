@@ -28,6 +28,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.View.GONE
 import android.view.View.OnClickListener
 import android.widget.FrameLayout
 import android.widget.ProgressBar
@@ -401,19 +402,19 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                 val box = searchedObject.boundingBox
                 Log.d(TAG, "Found ${box}")
                 graphicOverlay?.clear()
+                graphicOverlay?.visibility = GONE
 
                 graphicOverlay?.let {
                     val center = PointF(
                         it.translateX((box.left + box.right) / 2f),
-                        it.translateY((box.top + box.bottom) / 2f)
+                        it.translateY(box.bottom.toFloat())
                     )
                     val frame = arFragment?.arSceneView?.arFrame
                     if (frame != null) {
                         val hits = frame.hitTest(center.x, center.y)
                         for (hit in hits) {
                             val trackable = hit.trackable
-                            if (trackable is Plane &&
-                                /*trackable.isPoseInPolygon(hit.hitPose)*/ !done) {
+                            if (trackable is Plane && trackable.isPoseInPolygon(hit.hitPose)  && !done) {
 
                                 // Create the Anchor.
                                 val anchor = hit.createAnchor()
