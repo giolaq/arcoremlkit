@@ -48,7 +48,10 @@ import com.google.ar.sceneform.AnchorNode
 import com.google.ar.sceneform.ArSceneView
 import com.google.ar.sceneform.FrameTime
 import com.google.ar.sceneform.Scene
+import com.google.ar.sceneform.math.Vector3
+import com.google.ar.sceneform.rendering.MaterialFactory
 import com.google.ar.sceneform.rendering.ModelRenderable
+import com.google.ar.sceneform.rendering.ShapeFactory
 import com.google.ar.sceneform.ux.ArFragment
 import com.google.ar.sceneform.ux.TransformableNode
 import com.google.common.base.Objects
@@ -99,6 +102,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private var sceneView: ArSceneView? = null
     private var shouldConfigureSession = false
     private var andyRenderable: ModelRenderable? = null
+    private var luggageBB: ModelRenderable? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -152,6 +156,12 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                 toast.setGravity(Gravity.CENTER, 0, 0)
                 toast.show()
                 null
+            }
+
+
+        MaterialFactory.makeOpaqueWithColor(this, com.google.ar.sceneform.rendering.Color(Color.GREEN))
+            .thenAccept {
+                luggageBB = ShapeFactory.makeCube(Vector3(.45f, .56f, .25f), Vector3(0f, 0f, -0.3f), it)
             }
 
 
@@ -230,6 +240,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private fun configureSession() {
         val config = Config(session)
         config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+        config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
         session?.configure(config)
     }
 
@@ -407,14 +418,14 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                 graphicOverlay?.let {
                     val center = PointF(
                         it.translateX((box.left + box.right) / 2f),
-                        it.translateY(box.bottom.toFloat())
+                        it.translateY((box.bottom+box.top)/2f)
                     )
                     val frame = arFragment?.arSceneView?.arFrame
                     if (frame != null) {
                         val hits = frame.hitTest(center.x, center.y)
                         for (hit in hits) {
                             val trackable = hit.trackable
-                            if (trackable is Plane && trackable.isPoseInPolygon(hit.hitPose)  && !done) {
+                            if (trackable is Plane && trackable.isPoseInPolygon(hit.hitPose) && !done) {
 
                                 // Create the Anchor.
                                 val anchor = hit.createAnchor()
@@ -424,7 +435,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                                 // Create the transformable andy and add it to the anchor.
                                 val andy = TransformableNode(arFragment?.transformationSystem)
                                 andy.setParent(anchorNode)
-                                andy.renderable = andyRenderable
+                                andy.renderable = luggageBB
                                 andy.select()
                                 done = true
                                 break

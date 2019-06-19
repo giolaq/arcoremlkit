@@ -68,7 +68,6 @@ abstract class FrameProcessorBase<T> : FrameProcessor {
         val image = FirebaseVisionImage.fromByteArray(frame, metadata)
         val startMs = SystemClock.elapsedRealtime()
 
-        //TODO: WHat happens here?
         detectInImage(image)
             .addOnSuccessListener { results ->
                 Log.d(TAG, "Latency is: " + (SystemClock.elapsedRealtime() - startMs))
