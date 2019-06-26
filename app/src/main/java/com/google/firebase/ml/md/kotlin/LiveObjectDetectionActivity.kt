@@ -229,7 +229,8 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         //      ProminentObjectProcessor(graphicOverlay!!, workflowModel!!)
         //  }
         //  )
-        frameSource?.setFrameProcessor(ProminentObjectProcessor(graphicOverlay!!, workflowModel!!))
+        //frameSource?.setFrameProcessor(MultiObjectProcessor(graphicOverlay!!, workflowModel!!))
+       frameSource?.setFrameProcessor(ProminentObjectProcessor(graphicOverlay!!, workflowModel!!))
         frameSource?.setSceneView(sceneView)
         frameSource?.setSession(session)
 
@@ -410,15 +411,15 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             searchedObject.observe(this@LiveObjectDetectionActivity, Observer { nullableSearchedObject ->
                 val searchedObject = nullableSearchedObject ?: return@Observer
                 val productList = searchedObject.productList
-                val box = searchedObject.boundingBox
+                val box = graphicOverlay!!.translateRect(searchedObject.boundingBox)
                 Log.d(TAG, "Found ${box}")
                 graphicOverlay?.clear()
                 graphicOverlay?.visibility = GONE
 
                 graphicOverlay?.let {
                     val center = PointF(
-                        it.translateX((box.left + box.right) / 2f),
-                        it.translateY((box.bottom+box.top)/2f)
+                        ((box.left + box.right) / 2f),
+                        ((box.bottom))
                     )
                     val frame = arFragment?.arSceneView?.arFrame
                     if (frame != null) {

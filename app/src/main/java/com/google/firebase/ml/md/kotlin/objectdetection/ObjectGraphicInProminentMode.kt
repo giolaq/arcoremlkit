@@ -16,13 +16,8 @@
 
 package com.google.firebase.ml.md.kotlin.objectdetection
 
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
+import android.graphics.*
 import android.graphics.Paint.Style
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.graphics.Shader.TileMode
 import androidx.annotation.ColorInt
 import androidx.core.content.ContextCompat
@@ -87,7 +82,7 @@ internal class ObjectGraphicInProminentMode(
                                 R.dimen.bounding_box_stroke_width
                             }
                     ).toFloat()
-            color = Color.WHITE
+            color = Color.RED
         }
 
         boxGradientStartColor = ContextCompat.getColor(context, R.color.bounding_box_gradient_start)

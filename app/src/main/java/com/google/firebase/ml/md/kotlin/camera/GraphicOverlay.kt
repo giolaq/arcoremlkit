@@ -21,10 +21,13 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.RectF
 import android.util.AttributeSet
+import android.util.Log
 import android.view.View
+import androidx.core.graphics.toRectF
 import com.google.android.gms.common.images.Size
 import com.google.firebase.ml.md.kotlin.Utils
 import java.util.ArrayList
+import kotlin.math.max
 
 /**
  * A view which renders a series of custom graphics to be overlaid on top of an associated preview
@@ -109,12 +112,24 @@ class GraphicOverlay(context: Context, attrs: AttributeSet) : View(context, attr
      * Adjusts the `rect`'s coordinate from the preview's coordinate system to the view
      * coordinate system.
      */
-    fun translateRect(rect: Rect) = RectF(
-            translateX(rect.left.toFloat()),
+    fun translateRect(rect: Rect): RectF {
+        val rectF = RectF(
+            translateY(rect.left.toFloat()),
             translateY(rect.top.toFloat()),
-            translateX(rect.right.toFloat()),
-            translateY(rect.bottom.toFloat())
-    )
+            translateY(rect.right.toFloat()),
+            translateY(rect.bottom.toFloat()))
+
+        val offsetY = (height - (previewHeight*heightScaleFactor)) / 2
+        val offsetX =  (width - (previewWidth*heightScaleFactor)) / 2
+
+        val mappedBoundingBox = RectF().apply {
+            left = rectF.left  + offsetX
+            top = rectF.top  + offsetY
+            right = rectF.right  + offsetX
+            bottom = rectF.bottom  + offsetY
+        }
+        return mappedBoundingBox
+    }
 
     /** Draws the overlay with its associated graphic objects.  */
     override fun onDraw(canvas: Canvas) {
@@ -124,6 +139,7 @@ class GraphicOverlay(context: Context, attrs: AttributeSet) : View(context, attr
             widthScaleFactor = width.toFloat() / previewWidth
             heightScaleFactor = height.toFloat() / previewHeight
         }
+
 
         synchronized(lock) {
             graphics.forEach { it.draw(canvas) }

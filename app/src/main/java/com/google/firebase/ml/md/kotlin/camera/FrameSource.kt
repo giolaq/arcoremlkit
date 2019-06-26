@@ -36,6 +36,7 @@ import com.google.firebase.ml.md.kotlin.Utils
 import com.google.firebase.ml.md.kotlin.helpers.ImageConversion
 import com.google.firebase.ml.md.kotlin.settings.PreferenceUtils
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata
+import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata.ROTATION_0
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata.ROTATION_90
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -102,8 +103,8 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
         if (camera != null) return
 
         //camera = createCamera().apply {
-          //  setPreviewDisplay(surfaceHolder)
-            //startPreview()
+        //  setPreviewDisplay(surfaceHolder)
+        //startPreview()
         //}
 
         processingThread = Thread(processingRunnable).apply {
@@ -118,12 +119,8 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
         this.scene = scene
         if (scene == null) return
 
-//        camera = createCamera().apply {
-//            setPreviewDisplay(surfaceHolder)
-//            startPreview()
-//        }
         graphicOverlay.setTransformInfo(Size(640, 480))
-        scene.addOnUpdateListener { processingRunnable.setNextFrame(it)}
+        scene.addOnUpdateListener { processingRunnable.setNextFrame(it) }
 
 
         processingThread = Thread(processingRunnable).apply {
@@ -168,7 +165,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 //            camera = null
 //        }
 
-        scene?.removeOnUpdateListener { this.onSceneUpdate(it) }
+            // scene?.removeOnUpdateListener { this.onSceneUpdate(it) }
         // Release the reference to any image buffers, since these will no longer be in use.
         bytesToByteBuffer.clear()
     }
@@ -211,7 +208,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 
         camera.parameters = parameters
 
-       // camera.setPreviewCallbackWithBuffer(processingRunnable::setNextFrame)
+        // camera.setPreviewCallbackWithBuffer(processingRunnable::setNextFrame)
 
         // Four frame buffers are needed for working with the camera:
         //
@@ -272,6 +269,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
             PreferenceUtils.saveStringPreference(context, R.string.pref_key_rear_camera_picture_size, pictureSize.toString())
         }
     }
+
 
     /**
      * Calculates the correct rotation for the given camera id and sets the rotation in the
@@ -363,8 +361,8 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                 }
 
                 //if (!bytesToByteBuffer.containsKey(data)) {
-                  //  Log.d(TAG, "Skipping frame. Could not find ByteBuffer associated with the image data from the camera.")
-                   // return
+                //  Log.d(TAG, "Skipping frame. Could not find ByteBuffer associated with the image data from the camera.")
+                // return
                 //}
 
                 if (session == null) {
@@ -372,6 +370,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                 }
 
                 val frame = sceneView?.arFrame ?: return
+
 // Copy the camera stream to a bitmap
                 try {
                     frame.acquireCameraImage().use { image ->
@@ -380,7 +379,6 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                                 "Expected image in YUV_420_888 format, got format " + image.format)
                         }
 
-                        //TODO: Modify the preview size to make the overlay accordingly
                         Log.d("Hello", "Image acquired at $frameTime")
                         previewSize = Size(image.width, image.height)
 
@@ -393,7 +391,7 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                 } catch (e: Exception) {
                     Log.e(TAG, "Exception copying image", e)
                 }
-               // pendingFrameData = bytesToByteBuffer[data]
+                // pendingFrameData = bytesToByteBuffer[data]
 
                 // Notify the processor thread if it is waiting on the next frame (see below).
                 lock.notifyAll()
@@ -589,14 +587,14 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
                 }
 
                 Log.d("Hello", "Image acquired at $frameTime")
-                val rotation = 0
-                val frameMetadata = FrameMetadata(image.width, image.height, rotation)
+                    //val rotation = ROTATION_0
+                //val frameMetadata = FrameMetadata(image.height, image.width, rotation)
 
                 val data =
                     ImageConversion.YUV_420_888toNV21(image)
 
-                if(data != null) {
-                    frameProcessor?.process(data, frameMetadata, graphicOverlay!!)
+                if (data != null) {
+                    //  frameProcessor?.process(data, frameMetadata, graphicOverlay!!)
                 }
 
             }
