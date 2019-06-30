@@ -29,12 +29,4 @@ public class ImageConversion {
 
         return nv21;
     }
-
-
-    public static byte[] NV21toJPEG(byte[] nv21, int width, int height) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        YuvImage yuv = new YuvImage(nv21, ImageFormat.NV21, width, height, null);
-        yuv.compressToJpeg(new Rect(0, 0, width, height), 100, out);
-        return out.toByteArray();
-    }
 }

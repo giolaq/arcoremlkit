@@ -21,9 +21,7 @@ import android.animation.AnimatorSet
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.graphics.ImageFormat
 import android.graphics.PointF
-import android.hardware.Camera
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -42,12 +40,15 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.chip.Chip
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-import com.google.ar.core.*
-import com.google.ar.core.exceptions.*
+import com.google.ar.core.Config
+import com.google.ar.core.Plane
+import com.google.ar.core.Session
+import com.google.ar.core.exceptions.CameraNotAvailableException
+import com.google.ar.core.exceptions.UnavailableApkTooOldException
+import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
+import com.google.ar.core.exceptions.UnavailableSdkTooOldException
 import com.google.ar.sceneform.AnchorNode
 import com.google.ar.sceneform.ArSceneView
-import com.google.ar.sceneform.FrameTime
-import com.google.ar.sceneform.Scene
 import com.google.ar.sceneform.math.Vector3
 import com.google.ar.sceneform.rendering.MaterialFactory
 import com.google.ar.sceneform.rendering.ModelRenderable
@@ -57,11 +58,10 @@ import com.google.ar.sceneform.ux.TransformableNode
 import com.google.common.base.Objects
 import com.google.common.collect.ImmutableList
 import com.google.firebase.ml.md.R
-import com.google.firebase.ml.md.kotlin.camera.*
+import com.google.firebase.ml.md.kotlin.camera.FrameSource
+import com.google.firebase.ml.md.kotlin.camera.GraphicOverlay
+import com.google.firebase.ml.md.kotlin.camera.WorkflowModel
 import com.google.firebase.ml.md.kotlin.camera.WorkflowModel.WorkflowState
-import com.google.firebase.ml.md.kotlin.helpers.CameraPermissionHelper
-import com.google.firebase.ml.md.kotlin.helpers.ImageConversion
-import com.google.firebase.ml.md.kotlin.objectdetection.MultiObjectProcessor
 import com.google.firebase.ml.md.kotlin.objectdetection.ProminentObjectProcessor
 import com.google.firebase.ml.md.kotlin.productsearch.BottomSheetScrimView
 import com.google.firebase.ml.md.kotlin.productsearch.ProductAdapter
@@ -69,7 +69,6 @@ import com.google.firebase.ml.md.kotlin.productsearch.SearchEngine
 import com.google.firebase.ml.md.kotlin.settings.PreferenceUtils
 import com.google.firebase.ml.md.kotlin.settings.SettingsActivity
 import java.io.IOException
-import java.nio.ByteBuffer
 
 /** Demonstrates the object detection and visual search workflow using camera preview.  */
 class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
