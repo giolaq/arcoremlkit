@@ -18,7 +18,6 @@ package com.google.firebase.ml.md.kotlin
 
 import android.animation.AnimatorInflater
 import android.animation.AnimatorSet
-import android.content.Intent
 import android.graphics.Color
 import android.graphics.PointF
 import android.os.Bundle
@@ -69,7 +68,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private lateinit var preview: FrameLayout
     private lateinit var graphicOverlay: GraphicOverlay
     private var settingsButton: View? = null
-    private var flashButton: View? = null
     private var promptChip: Chip? = null
     private var promptChipAnimator: AnimatorSet? = null
     private var searchButton: ExtendedFloatingActionButton? = null
@@ -116,9 +114,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         }
         searchProgressBar = findViewById(R.id.search_progress_bar)
         findViewById<View>(R.id.close_button).setOnClickListener(this)
-        flashButton = findViewById<View>(R.id.flash_button).apply {
-            setOnClickListener(this@LiveObjectDetectionActivity)
-        }
 
         setUpWorkflowModel()
 
@@ -238,9 +233,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                 workflowModel.onSearchButtonClicked()
             }
             R.id.close_button -> onBackPressed()
-            R.id.flash_button -> {
-                flashButton?.isSelected = flashButton?.isSelected != true
-            }
         }
     }
 
@@ -258,7 +250,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private fun stopCameraPreview() {
         if (workflowModel.isCameraLive) {
             workflowModel.markCameraFrozen()
-            flashButton?.isSelected = false
             frameSource.stop()
         }
     }
