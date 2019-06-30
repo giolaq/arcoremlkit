@@ -319,10 +319,11 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                                 anchorNode.setParent(arFragment.arSceneView?.scene)
 
                                 // Create the transformable and add it to the anchor.
-                                val andy = DraggableRotableNode(arFragment.transformationSystem)
-                                andy.setParent(anchorNode)
-                                andy.renderable = luggageBB
-                                andy.select()
+                                DraggableRotableNode(arFragment.transformationSystem).apply {
+                                    setParent(anchorNode)
+                                    renderable = luggageBB
+                                    select()
+                                }
                                 done = true
                                 break
                             }

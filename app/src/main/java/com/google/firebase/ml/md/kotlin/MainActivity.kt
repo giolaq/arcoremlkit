@@ -16,7 +16,6 @@
 
 package com.google.firebase.ml.md.kotlin
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -34,8 +33,6 @@ class MainActivity : AppCompatActivity() {
 
     private enum class DetectionMode(val titleResId: Int, val subtitleResId: Int) {
         ODT_LIVE(R.string.mode_odt_live_title, R.string.mode_odt_live_subtitle),
-        ODT_STATIC(R.string.mode_odt_static_title, R.string.mode_odt_static_subtitle),
-        BARCODE_LIVE(R.string.mode_barcode_live_title, R.string.mode_barcode_live_subtitle)
     }
 
     override fun onCreate(bundle: Bundle?) {
