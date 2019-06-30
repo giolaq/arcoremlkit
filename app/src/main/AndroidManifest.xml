@@ -43,14 +43,7 @@
         <activity
             android:name=".kotlin.LiveObjectDetectionActivity"
             android:exported="false"
-            android:screenOrientation="portrait"></activity>
-
-        <activity
-            android:name=".kotlin.settings.SettingsActivity"
-            android:exported="false"
-            android:label="@string/settings_title"
-            android:screenOrientation="portrait"
-            android:theme="@style/Theme.AppCompat.Light"></activity>
+            android:screenOrientation="portrait" />
 
         <!-- This tag indicates that this application requires ARCore.  This results in the Google Play
          Store downloading and installing ARCore along with the application. -->
