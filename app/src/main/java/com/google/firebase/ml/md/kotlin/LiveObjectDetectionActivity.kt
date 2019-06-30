@@ -50,13 +50,13 @@ import com.google.ar.sceneform.rendering.MaterialFactory
 import com.google.ar.sceneform.rendering.ModelRenderable
 import com.google.ar.sceneform.rendering.ShapeFactory
 import com.google.ar.sceneform.ux.ArFragment
-import com.google.ar.sceneform.ux.TransformableNode
 import com.google.common.base.Objects
 import com.google.firebase.ml.md.R
 import com.google.firebase.ml.md.kotlin.camera.FrameSource
 import com.google.firebase.ml.md.kotlin.camera.GraphicOverlay
 import com.google.firebase.ml.md.kotlin.camera.WorkflowModel
 import com.google.firebase.ml.md.kotlin.camera.WorkflowModel.WorkflowState
+import com.google.firebase.ml.md.kotlin.helpers.DraggableRotableNode
 import com.google.firebase.ml.md.kotlin.objectdetection.ProminentObjectProcessor
 import com.google.firebase.ml.md.kotlin.productsearch.SearchEngine
 import com.google.firebase.ml.md.kotlin.settings.PreferenceUtils
@@ -318,8 +318,8 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                                 val anchorNode = AnchorNode(anchor)
                                 anchorNode.setParent(arFragment.arSceneView?.scene)
 
-                                // Create the transformable andy and add it to the anchor.
-                                val andy = TransformableNode(arFragment.transformationSystem)
+                                // Create the transformable and add it to the anchor.
+                                val andy = DraggableRotableNode(arFragment.transformationSystem)
                                 andy.setParent(anchorNode)
                                 andy.renderable = luggageBB
                                 andy.select()
