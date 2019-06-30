@@ -231,6 +231,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
         currentWorkflowState = WorkflowState.NOT_STARTED
         stopCameraPreview()
+        frameSource.release()
     }
 
     override fun onDestroy() {

@@ -31,16 +31,14 @@ import com.google.ar.sceneform.ArSceneView
 import com.google.ar.sceneform.FrameTime
 import com.google.ar.sceneform.Scene
 import com.google.firebase.ml.md.R
-import com.google.firebase.ml.md.kotlin.LiveObjectDetectionActivity
 import com.google.firebase.ml.md.kotlin.Utils
 import com.google.firebase.ml.md.kotlin.helpers.ImageConversion
 import com.google.firebase.ml.md.kotlin.settings.PreferenceUtils
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata
-import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata.ROTATION_0
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata.ROTATION_90
 import java.io.IOException
 import java.nio.ByteBuffer
-import java.util.IdentityHashMap
+import java.util.*
 
 /**
  * Manages the camera and allows UI updates on top of it (e.g. overlaying extra Graphics). This
@@ -58,7 +56,6 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
     private var scene: Scene? = null
     private var session: Session? = null
     private var sceneView: ArSceneView? = null
-    private var camera: Camera? = null
     @FirebaseVisionImageMetadata.Rotation
     private var rotation: Int = 0
 
@@ -89,38 +86,26 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
     private val bytesToByteBuffer = IdentityHashMap<ByteArray, ByteBuffer>()
     private val context: Context = graphicOverlay.context
 
+    val updateListener: Scene.OnUpdateListener = Scene.OnUpdateListener {
+        processingRunnable.setNextFrame(it)
+    }
 
     /**
      * Opens the camera and starts sending preview frames to the underlying detector. The supplied
      * surface holder is used for the preview so frames can be displayed to the user.
      *
-     * @param surfaceHolder the surface holder to use for the preview frames.
+     * @param scene the ar scene to use for the preview frames.
      * @throws IOException if the supplied surface holder could not be used as the preview display.
      */
-    @Synchronized
-    @Throws(IOException::class)
-    internal fun start(surfaceHolder: SurfaceHolder) {
-        if (camera != null) return
-
-        //camera = createCamera().apply {
-        //  setPreviewDisplay(surfaceHolder)
-        //startPreview()
-        //}
-
-        processingThread = Thread(processingRunnable).apply {
-            processingRunnable.setActive(true)
-            start()
-        }
-    }
-
     @Synchronized
     @Throws(IOException::class)
     internal fun start(scene: Scene?) {
         this.scene = scene
         if (scene == null) return
 
+
         graphicOverlay.setTransformInfo(Size(640, 480))
-        scene.addOnUpdateListener { processingRunnable.setNextFrame(it) }
+        scene.addOnUpdateListener(updateListener)
 
 
         processingThread = Thread(processingRunnable).apply {
@@ -153,19 +138,8 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
             processingThread = null
         }
 
-//        camera?.let {
-//            it.stopPreview()
-//            it.setPreviewCallbackWithBuffer(null)
-//            try {
-//                it.setPreviewDisplay(null)
-//            } catch (e: Exception) {
-//                Log.e(TAG, "Failed to clear camera preview: $e")
-//            }
-//            it.release()
-//            camera = null
-//        }
+        scene?.removeOnUpdateListener(updateListener)
 
-            // scene?.removeOnUpdateListener { this.onSceneUpdate(it) }
         // Release the reference to any image buffers, since these will no longer be in use.
         bytesToByteBuffer.clear()
     }
@@ -179,59 +153,6 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
         }
     }
 
-    /**
-     * Opens the camera and applies the user settings.
-     *
-     * @throws IOException if camera cannot be found or preview cannot be processed.
-     */
-    @Throws(IOException::class)
-    private fun createCamera(): Camera {
-        val camera = Camera.open() ?: throw IOException("There is no back-facing camera.")
-        val parameters = camera.parameters
-        setPreviewAndPictureSize(camera, parameters)
-        setRotation(camera, parameters)
-
-        val previewFpsRange = selectPreviewFpsRange(camera)
-            ?: throw IOException("Could not find suitable preview frames per second range.")
-        parameters.setPreviewFpsRange(
-            previewFpsRange[Parameters.PREVIEW_FPS_MIN_INDEX],
-            previewFpsRange[Parameters.PREVIEW_FPS_MAX_INDEX]
-        )
-
-        parameters.previewFormat = IMAGE_FORMAT
-
-        if (parameters.supportedFocusModes.contains(Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
-            parameters.focusMode = Parameters.FOCUS_MODE_CONTINUOUS_VIDEO
-        } else {
-            Log.i(TAG, "Camera auto focus is not supported on this device.")
-        }
-
-        camera.parameters = parameters
-
-        // camera.setPreviewCallbackWithBuffer(processingRunnable::setNextFrame)
-
-        // Four frame buffers are needed for working with the camera:
-        //
-        //   one for the frame that is currently being executed upon in doing detection
-        //   one for the next pending frame to process immediately upon completing detection
-        //   two for the frames that the camera uses to populate future preview images
-        //
-        // Through trial and error it appears that two free buffers, in addition to the two buffers
-        // used in this code, are needed for the camera to work properly. Perhaps the camera has one
-        // thread for acquiring images, and another thread for calling into user code. If only three
-        // buffers are used, then the camera will spew thousands of warning messages when detection
-        // takes a non-trivial amount of time.
-        previewSize?.let {
-            camera.addCallbackBuffer(createPreviewBuffer(it))
-            camera.addCallbackBuffer(createPreviewBuffer(it))
-            camera.addCallbackBuffer(createPreviewBuffer(it))
-            camera.addCallbackBuffer(createPreviewBuffer(it))
-        }
-
-        return camera
-    }
-
-
     fun setFrameProcessor(processor: FrameProcessor) {
         graphicOverlay.clear()
         synchronized(processorLock) {
@@ -239,37 +160,6 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
             frameProcessor = processor
         }
     }
-
-
-    @Throws(IOException::class)
-    private fun setPreviewAndPictureSize(camera: Camera, parameters: Parameters) {
-
-        // Gives priority to the preview size specified by the user if exists.
-        val sizePair: CameraSizePair = PreferenceUtils.getUserSpecifiedPreviewSize(context) ?: run {
-            // Camera preview size is based on the landscape mode, so we need to also use the aspect
-            // ration of display in the same mode for comparison.
-            val displayAspectRatioInLandscape: Float =
-                if (Utils.isPortraitMode(graphicOverlay.context)) {
-                    graphicOverlay.height.toFloat() / graphicOverlay.width
-                } else {
-                    graphicOverlay.width.toFloat() / graphicOverlay.height
-                }
-            selectSizePair(camera, displayAspectRatioInLandscape)
-        } ?: throw IOException("Could not find suitable preview size.")
-
-        previewSize = sizePair.preview.also {
-            Log.v(TAG, "Camera preview size: $it")
-            parameters.setPreviewSize(it.width, it.height)
-            PreferenceUtils.saveStringPreference(context, R.string.pref_key_rear_camera_preview_size, it.toString())
-        }
-
-        sizePair.picture?.let { pictureSize ->
-            Log.v(TAG, "Camera picture size: $pictureSize")
-            parameters.setPictureSize(pictureSize.width, pictureSize.height)
-            PreferenceUtils.saveStringPreference(context, R.string.pref_key_rear_camera_picture_size, pictureSize.toString())
-        }
-    }
-
 
     /**
      * Calculates the correct rotation for the given camera id and sets the rotation in the
@@ -297,31 +187,6 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
         this.rotation = angle / 90
         camera.setDisplayOrientation(angle)
         parameters.setRotation(angle)
-    }
-
-    /**
-     * Creates one buffer for the camera preview callback. The size of the buffer is based off of the
-     * camera preview size and the format of the camera image.
-     *
-     * @return a new preview buffer of the appropriate size for the current camera settings.
-     */
-    private fun createPreviewBuffer(previewSize: Size): ByteArray {
-        val bitsPerPixel = ImageFormat.getBitsPerPixel(IMAGE_FORMAT)
-        val sizeInBits = previewSize.height.toLong() * previewSize.width.toLong() * bitsPerPixel.toLong()
-        val bufferSize = Math.ceil(sizeInBits / 8.0).toInt() + 1
-
-        // Creating the byte array this way and wrapping it, as opposed to using .allocate(),
-        // should guarantee that there will be an array to work with.
-        val byteArray = ByteArray(bufferSize)
-        val byteBuffer = ByteBuffer.wrap(byteArray)
-        if (!byteBuffer.hasArray() || !byteBuffer.array()!!.contentEquals(byteArray)) {
-            // This should never happen. If it does, then we wouldn't be passing the preview content to
-            // the underlying detector later.
-            throw IllegalStateException("Failed to create valid buffer for camera source.")
-        }
-
-        bytesToByteBuffer[byteArray] = byteBuffer
-        return byteArray
     }
 
     /**
@@ -371,19 +236,19 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 
                 val frame = sceneView?.arFrame ?: return
 
-// Copy the camera stream to a bitmap
+                // Copy the camera stream to a bitmap
                 try {
                     frame.acquireCameraImage().use { image ->
                         if (image.format != ImageFormat.YUV_420_888) {
                             throw IllegalArgumentException(
-                                "Expected image in YUV_420_888 format, got format " + image.format)
+                                    "Expected image in YUV_420_888 format, got format " + image.format)
                         }
 
                         Log.d("Hello", "Image acquired at $frameTime")
                         previewSize = Size(image.width, image.height)
 
                         val data =
-                            ImageConversion.YUV_420_888toNV21(image)
+                                ImageConversion.YUV_420_888toNV21(image)
 
                         pendingFrameDataArray = data
 
@@ -469,7 +334,6 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
 
         private const val TAG = "CameraSource"
 
-        private const val IMAGE_FORMAT = ImageFormat.NV21
         private const val MIN_CAMERA_PREVIEW_WIDTH = 400
         private const val MAX_CAMERA_PREVIEW_WIDTH = 1300
         private const val DEFAULT_REQUESTED_CAMERA_PREVIEW_WIDTH = 640
@@ -569,39 +433,6 @@ class FrameSource(private val graphicOverlay: GraphicOverlay) {
             }
             return selectedFpsRange
         }
-    }
-
-
-    private fun onSceneUpdate(frameTime: FrameTime) {
-        if (session == null) {
-            return
-        }
-
-        val frame = sceneView?.arFrame ?: return
-// Copy the camera stream to a bitmap
-        try {
-            frame.acquireCameraImage().use { image ->
-                if (image.format != ImageFormat.YUV_420_888) {
-                    throw IllegalArgumentException(
-                        "Expected image in YUV_420_888 format, got format " + image.format)
-                }
-
-                Log.d("Hello", "Image acquired at $frameTime")
-                    //val rotation = ROTATION_0
-                //val frameMetadata = FrameMetadata(image.height, image.width, rotation)
-
-                val data =
-                    ImageConversion.YUV_420_888toNV21(image)
-
-                if (data != null) {
-                    //  frameProcessor?.process(data, frameMetadata, graphicOverlay!!)
-                }
-
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Exception copying image", e)
-        }
-
     }
 
     fun setSceneView(sceneView: ArSceneView?) {
