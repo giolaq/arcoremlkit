@@ -1,11 +1,7 @@
 package com.google.firebase.ml.md.kotlin.helpers;
 
-import android.graphics.ImageFormat;
-import android.graphics.Rect;
-import android.graphics.YuvImage;
 import android.media.Image;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 
 public class ImageConversion {

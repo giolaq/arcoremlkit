@@ -37,12 +37,14 @@ import com.google.android.material.floatingactionbutton.ExtendedFloatingActionBu
 import com.google.ar.core.Config
 import com.google.ar.core.Plane
 import com.google.ar.core.Session
+import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException
 import com.google.ar.sceneform.AnchorNode
 import com.google.ar.sceneform.ArSceneView
+import com.google.ar.sceneform.Scene
 import com.google.ar.sceneform.math.Vector3
 import com.google.ar.sceneform.rendering.MaterialFactory
 import com.google.ar.sceneform.rendering.ModelRenderable
@@ -63,6 +65,7 @@ import java.io.IOException
 /** Demonstrates the object detection and visual search workflow using AR camera preview.  */
 class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
+    private lateinit var updateListener: Scene.OnUpdateListener
     private var done: Boolean = false
     private lateinit var frameSource: FrameSource
     private lateinit var preview: FrameLayout
@@ -77,7 +80,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private var currentWorkflowState: WorkflowState? = null
     private var searchEngine: SearchEngine? = null
 
-    private var arFragment: ArFragment? = null
+    private lateinit var arFragment: ArFragment
     private var session: Session? = null
     private var sceneView: ArSceneView? = null
     private var shouldConfigureSession = false
@@ -92,8 +95,8 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
         setContentView(R.layout.activity_live_object_kotlin)
 
-        arFragment = supportFragmentManager.findFragmentById(R.id.ux_fragment) as ArFragment?
-        sceneView = arFragment?.arSceneView
+        arFragment = supportFragmentManager.findFragmentById(R.id.ux_fragment) as ArFragment
+        sceneView = arFragment.arSceneView
 
 
         preview = findViewById(R.id.camera_preview)
@@ -124,7 +127,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                 .setSource(this, R.raw.andy)
                 .build()
                 .thenAccept { renderable -> andyRenderable = renderable }
-                .exceptionally { throwable ->
+                .exceptionally {
                     val toast = Toast.makeText(this, "Unable to load andy renderable", Toast.LENGTH_LONG)
                     toast.setGravity(Gravity.CENTER, 0, 0)
                     toast.show()
@@ -197,8 +200,17 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             setSession(session)
         }
 
-        workflowModel.setWorkflowState(WorkflowState.DETECTING)
-
+        updateListener = Scene.OnUpdateListener {
+            val frame = arFragment.arSceneView.arFrame
+            if (frame != null) {
+                for (plane in frame.getUpdatedTrackables(Plane::class.java)) {
+                    if (plane.trackingState == TrackingState.TRACKING) {
+                        workflowModel.setWorkflowState(WorkflowState.DETECTING)
+                    }
+                }
+            }
+        }
+        arFragment.arSceneView.scene.addOnUpdateListener(updateListener)
     }
 
     private fun configureSession() {
@@ -240,7 +252,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         if (!workflowModel.isCameraLive) {
             try {
                 workflowModel.markCameraLive()
-                frameSource.start(arFragment?.arSceneView?.scene)
+                frameSource.start(arFragment.arSceneView?.scene)
             } catch (e: IOException) {
                 Log.e(TAG, "Failed to start camera preview!", e)
             }
@@ -284,7 +296,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
             searchedObject.observe(this@LiveObjectDetectionActivity, Observer { nullableSearchedObject ->
                 val searchedObject = nullableSearchedObject ?: return@Observer
                 val box = graphicOverlay.translateRect(searchedObject.boundingBox)
-                Log.d(TAG, "Found ${box}")
+                Log.d(TAG, "Found $box")
                 graphicOverlay.clear()
                 graphicOverlay.visibility = GONE
 
@@ -293,7 +305,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                             ((box.left + box.right) / 2f),
                             ((box.bottom))
                     )
-                    val frame = arFragment?.arSceneView?.arFrame
+                    val frame = arFragment.arSceneView?.arFrame
                     if (frame != null) {
                         val hits = frame.hitTest(center.x, center.y)
                         for (hit in hits) {
@@ -303,10 +315,10 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                                 // Create the Anchor.
                                 val anchor = hit.createAnchor()
                                 val anchorNode = AnchorNode(anchor)
-                                anchorNode.setParent(arFragment?.arSceneView?.scene)
+                                anchorNode.setParent(arFragment.arSceneView?.scene)
 
                                 // Create the transformable andy and add it to the anchor.
-                                val andy = TransformableNode(arFragment?.transformationSystem)
+                                val andy = TransformableNode(arFragment.transformationSystem)
                                 andy.setParent(anchorNode)
                                 andy.renderable = luggageBB
                                 andy.select()
@@ -319,8 +331,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
                 }
             })
         }
-
-
     }
 
     private fun stateChangeInAutoSearchMode(workflowState: WorkflowState) {
@@ -330,6 +340,9 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
         searchProgressBar?.visibility = GONE
         when (workflowState) {
             WorkflowState.DETECTING, WorkflowState.DETECTED, WorkflowState.CONFIRMING -> {
+                if (workflowState == WorkflowState.DETECTING) {
+                    arFragment.arSceneView.scene.removeOnUpdateListener(updateListener)
+                }
                 promptChip?.visibility = View.VISIBLE
                 promptChip?.setText(
                         if (workflowState == WorkflowState.CONFIRMING)

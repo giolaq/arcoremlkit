@@ -16,8 +16,6 @@
 
 package com.google.firebase.ml.md.kotlin.camera
 
-import java.nio.ByteBuffer
-
 /** An interface to process the input camera frame and perform detection on it.  */
 interface FrameProcessor {
 
