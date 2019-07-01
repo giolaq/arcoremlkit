@@ -78,7 +78,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
     private var searchProgressBar: ProgressBar? = null
     private lateinit var workflowModel: WorkflowModel
     private var currentWorkflowState: WorkflowState? = null
-    private var searchEngine: SearchEngine? = null
+    private var searchEngine: SearchEngine = SearchEngine(applicationContext)
 
     private lateinit var arFragment: ArFragment
     private var session: Session? = null
@@ -90,8 +90,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        searchEngine = SearchEngine(applicationContext)
 
         setContentView(R.layout.activity_live_object_kotlin)
 
@@ -236,7 +234,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        searchEngine?.shutdown()
+        searchEngine.shutdown()
     }
 
     override fun onClick(view: View) {
@@ -289,7 +287,7 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
             // Observes changes on the object to search, if happens, fire product search request.
             objectToSearch.observe(this@LiveObjectDetectionActivity, Observer { detectObject ->
-                searchEngine!!.search(detectObject) { detectedObject, products -> workflowModel.onSearchCompleted(detectedObject, products) }
+                searchEngine.search(detectObject) { detectedObject, products -> workflowModel.onSearchCompleted(detectedObject, products) }
             })
 
             // Observes changes on the object that has search completed, if happens, show the bottom sheet
