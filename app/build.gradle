@@ -3,11 +3,11 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 
 android {
-    compileSdkVersion 28
+    compileSdkVersion 29
     defaultConfig {
         applicationId "com.google.firebase.ml.md"
         minSdkVersion 24
-        targetSdkVersion 28
+        targetSdkVersion 29
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -42,27 +42,28 @@ dependencies {
 
     implementation 'com.android.support:preference-v7:28.0.0'
     implementation 'com.android.volley:volley:1.1.1'
-    implementation 'com.google.android.material:material:1.1.0-alpha07'
+    implementation 'com.google.android.material:material:1.1.0-alpha10'
     implementation "android.arch.lifecycle:extensions:1.1.1"
     implementation "androidx.annotation:annotation:1.1.0"
-    implementation "androidx.core:core-ktx:1.0.2"
-    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.0.0"
+    implementation "androidx.core:core-ktx:1.1.0"
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.1.0"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 
     // MLKit Dependencies
-    implementation 'com.google.firebase:firebase-ml-vision:21.0.0'
-    implementation 'com.google.firebase:firebase-ml-vision-object-detection-model:17.0.0'
+    implementation 'com.google.firebase:firebase-ml-vision:23.0.0'
+    implementation 'com.google.firebase:firebase-ml-vision-object-detection-model:19.0.1'
 
     api 'com.google.guava:guava:27.0.1-android'
 
 
     // Provides ArFragment, and other Sceneform UX resources:
-    implementation "com.google.ar.sceneform.ux:sceneform-ux:1.9.0"
+    implementation "com.google.ar.sceneform.ux:sceneform-ux:1.11.0"
 
 }
 
 apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.ar.sceneform.plugin'
+
 
 
 sceneform.asset('sampledata/models/andy.obj',
