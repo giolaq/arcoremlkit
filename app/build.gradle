@@ -25,6 +25,7 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+    buildToolsVersion = '28.0.3'
 
     applicationVariants.all { variant ->
         variant.getRuntimeConfiguration().exclude group: 'com.google.code.findbugs', module: 'jsr305'
@@ -64,9 +65,3 @@ dependencies {
 apply plugin: 'com.google.gms.google-services'
 apply plugin: 'com.google.ar.sceneform.plugin'
 
-
-
-sceneform.asset('sampledata/models/andy.obj',
-        'default',
-        'sampledata/models/andy.sfa',
-        'src/main/assets/andy')
