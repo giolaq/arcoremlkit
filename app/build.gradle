@@ -27,12 +27,6 @@ android {
     }
     buildToolsVersion = '28.0.3'
 
-    applicationVariants.all { variant ->
-        variant.getRuntimeConfiguration().exclude group: 'com.google.code.findbugs', module: 'jsr305'
-        variant.getRuntimeConfiguration().exclude group: 'com.google.j2objc', module: 'j2objc-annotations'
-        variant.getRuntimeConfiguration().exclude group: 'org.checkerframework', module: 'checker-compat-qual'
-        variant.getRuntimeConfiguration().exclude group: 'org.codehaus.mojo', module: 'animal-sniffer-annotations'
-    }
 }
 
 androidExtensions {
@@ -58,7 +52,7 @@ dependencies {
 
 
     // Provides ArFragment, and other Sceneform UX resources:
-    implementation "com.google.ar.sceneform.ux:sceneform-ux:1.11.0"
+    implementation "com.google.ar.sceneform.ux:sceneform-ux:1.12.0"
 
 }
 
