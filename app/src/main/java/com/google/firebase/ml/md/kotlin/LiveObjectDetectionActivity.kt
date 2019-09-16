@@ -120,20 +120,6 @@ class LiveObjectDetectionActivity : AppCompatActivity(), OnClickListener {
 
         setUpWorkflowModel()
 
-
-        // When you build a Renderable, Sceneform loads its resources in the background while returning
-        // a CompletableFuture. Call thenAccept(), handle(), or check isDone() before calling get().
-        ModelRenderable.builder()
-                .setSource(this, R.raw.andy)
-                .build()
-                .thenAccept { renderable -> andyRenderable = renderable }
-                .exceptionally {
-                    val toast = Toast.makeText(this, "Unable to load andy renderable", Toast.LENGTH_LONG)
-                    toast.setGravity(Gravity.CENTER, 0, 0)
-                    toast.show()
-                    null
-                }
-
         MaterialFactory.makeOpaqueWithColor(this, com.google.ar.sceneform.rendering.Color(Color.GREEN))
                 .thenAccept {
                     luggageBB = ShapeFactory.makeCube(Vector3(.45f, .56f, .25f), Vector3(0f, 0f, -0.3f), it)
